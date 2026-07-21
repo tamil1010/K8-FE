@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   RefreshCw, Search, ChevronLeft, ChevronRight,
   Eye, FileText, Microscope, RotateCcw, Trash2,
-  AlertTriangle, Loader2, Filter
+  AlertTriangle, Loader2, Filter, Plus
 } from 'lucide-react';
 import { podApi } from '../services/podApi';
 import { useToast } from '../context/ToastContext';
@@ -10,6 +10,7 @@ import { PodDetailsModal }  from '../components/pods/PodDetailsModal';
 import { PodLogsModal }     from '../components/pods/PodLogsModal';
 import { PodDescribeModal } from '../components/pods/PodDescribeModal';
 import { ConfirmDialog }    from '../components/pods/ConfirmDialog';
+import { CreatePodModal }   from '../components/pods/CreatePodModal';
 
 // ============================================================================
 // CONSTANTS
@@ -71,10 +72,10 @@ export const PodsPage = () => {
   // ── Pagination ───────────────────────────────────────────────────────────────
   const [currentPage,    setCurrentPage]    = useState(1);
 
-  // ── Modal state ──────────────────────────────────────────────────────────────
   const [detailsPod,     setDetailsPod]     = useState(null); // PodDetailsModal
   const [logsPod,        setLogsPod]        = useState(null); // PodLogsModal
   const [describePod,    setDescribePod]    = useState(null); // PodDescribeModal
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false); // CreatePodModal
 
   // ── Confirm dialogs ──────────────────────────────────────────────────────────
   const [deleteTarget,   setDeleteTarget]   = useState(null); // pod to delete
@@ -211,14 +212,23 @@ export const PodsPage = () => {
             <h1 className="text-2xl font-bold text-gray-900">Pods</h1>
             <p className="text-sm text-gray-500">Running workloads across namespaces</p>
           </div>
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing || loading}
-            className="flex items-center px-3.5 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 focus:outline-none transition-colors"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 mr-2 ${isRefreshing ? 'animate-spin text-k8s-blue' : ''}`} />
-            {isRefreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center px-3.5 py-1.5 bg-k8s-blue border border-transparent rounded shadow-sm text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              Create Pod
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing || loading}
+              className="flex items-center px-3.5 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 focus:outline-none transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 mr-2 ${isRefreshing ? 'animate-spin text-k8s-blue' : ''}`} />
+              {isRefreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
         </div>
 
         {/* ── Filters row ───────────────────────────────────────────────────── */}
@@ -526,6 +536,17 @@ export const PodsPage = () => {
       </div>
 
       {/* ── Modals ────────────────────────────────────────────────────────────── */}
+
+      {/* Create Pod */}
+      <CreatePodModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        namespaces={namespaces}
+        onSuccess={() => {
+          setIsCreateModalOpen(false);
+          fetchPods(false); // auto-refresh table silently
+        }}
+      />
 
       {/* Pod Details */}
       {detailsPod && (

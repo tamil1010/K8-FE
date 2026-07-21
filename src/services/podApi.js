@@ -46,6 +46,14 @@ export const podApi = {
   },
 
   /**
+   * Create a new pod.
+   */
+  createPod: async (podData) => {
+    const res = await podAxios.post('/pod-mgmt/pods', podData);
+    return res.data;
+  },
+
+  /**
    * Fetch all namespaces from the cluster.
    */
   getNamespaces: async () => {

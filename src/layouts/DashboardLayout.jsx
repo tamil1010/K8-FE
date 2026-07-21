@@ -43,63 +43,29 @@ export const DashboardLayout = ({ children }) => {
   return (
     <div className="min-h-screen bg-k8s-bg flex flex-col font-sans">
       {/* Navbar */}
-      <header className="bg-k8s-blue text-white shadow-md z-30 sticky top-0 flex items-center justify-between px-4 py-3 h-16">
-        <div className="flex items-center">
-          {/* Mobile Menu Button */}
+      <header className="bg-k8s-blue text-white shadow-md z-30 sticky top-0 flex items-center justify-between px-4 py-3 h-16 relative">
+        {/* Left Side (Mobile Menu) */}
+        <div className="flex items-center z-10">
           <button 
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="md:hidden p-1 mr-2 text-white hover:bg-blue-600 rounded transition-colors"
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
+        </div>
 
-          {/* Logo */}
-          <Link to="/" className="flex items-center select-none mr-8">
+        {/* Center Logo */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <Link to="/" className="flex items-center select-none pointer-events-auto">
             <svg className="w-8 h-8 mr-2.5 text-white" viewBox="0 0 256 250" fill="currentColor">
               <path d="M128 0L23.7 34.3l15.9 123.4 88.4 92.3 88.4-92.3 15.9-123.4L128 0zm0 30l81.6 26.8-12.4 96.6-69.2 72.3-69.2-72.3-12.4-96.6L128 30z"/>
             </svg>
             <span className="font-bold text-lg tracking-wider hidden sm:inline">KUBERNETES</span>
           </Link>
-
-          {/* Cluster Status */}
-          <div className="hidden lg:flex items-center text-xs bg-blue-600/50 px-2.5 py-1 rounded-full border border-blue-400/30">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 mr-2 animate-pulse"></span>
-            <span className="font-medium text-blue-100">Cluster: </span>
-            <span className="ml-1 font-bold text-white">Active-prod-1</span>
-          </div>
         </div>
 
-        {/* Search and Filters */}
-        <div className="flex-1 max-w-xl mx-4 relative hidden md:block">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-blue-200" />
-          </div>
-          <input
-            type="text"
-            placeholder="Search resources..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-blue-600/35 border border-blue-400/40 rounded py-1.5 pl-10 pr-4 text-sm text-white placeholder-blue-200 focus:outline-none focus:bg-blue-600/70 focus:border-white transition-all shadow-inner"
-          />
-        </div>
-
-        {/* Namespace & Profile */}
-        <div className="flex items-center gap-4">
-          {/* Namespace Dropdown */}
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-blue-100 font-medium hidden sm:inline">Namespace:</label>
-            <select
-              value={namespace}
-              onChange={(e) => setNamespace(e.target.value)}
-              className="bg-white text-gray-800 text-xs font-semibold rounded px-2.5 py-1.5 border border-blue-400/30 outline-none focus:ring-2 focus:ring-blue-300 transition-shadow"
-            >
-              {namespaces.map((ns) => (
-                <option key={ns} value={ns}>{ns}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* User Profile */}
+        {/* User Profile */}
+        <div className="flex items-center gap-4 z-10">
           <div className="relative">
             <button
               onClick={() => setProfileOpen(!profileOpen)}
