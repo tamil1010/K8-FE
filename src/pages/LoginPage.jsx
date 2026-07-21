@@ -62,9 +62,27 @@ export const LoginPage = () => {
 
         {/* Credentials Tip */}
         <div className="bg-blue-50 border-l-4 border-k8s-blue p-3.5 mb-6 rounded text-xs text-blue-800 space-y-1">
-          <p className="font-semibold">💡 Local Development Credentials:</p>
-          <p>Username: <span className="font-mono bg-blue-100/70 px-1 rounded text-blue-900">admin</span></p>
-          <p>Password: <span className="font-mono bg-blue-100/70 px-1 rounded text-blue-900">admin123</span></p>
+          <p className="font-semibold mb-1">💡 RBAC Test Users (Backend verified):</p>
+          <div className="grid grid-cols-3 gap-1.5 font-semibold text-blue-900 border-b border-blue-100 pb-1 mb-1">
+            <span>Role</span>
+            <span>Username</span>
+            <span>Password</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
+            <span className="font-sans font-semibold text-gray-700">Admin</span>
+            <span>admin</span>
+            <span>admin123</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
+            <span className="font-sans font-semibold text-gray-700">Developer</span>
+            <span>developer</span>
+            <span>dev123</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
+            <span className="font-sans font-semibold text-gray-700">Viewer</span>
+            <span>viewer</span>
+            <span>viewer123</span>
+          </div>
         </div>
 
         {/* Form */}

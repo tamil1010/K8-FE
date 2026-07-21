@@ -34,7 +34,8 @@ export const OverviewPage = () => {
   
   // Data states
   const [stats, setStats] = useState(null);
-  const [chartData, setChartData] = useState({ cpu: [], memory: [] });
+  const [cpuHistory, setCpuHistory] = useState([]);
+  const [memoryHistory, setMemoryHistory] = useState([]);
   const [events, setEvents] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -42,13 +43,25 @@ export const OverviewPage = () => {
     if (showSkeleton) setLoading(true);
     setError(null);
     try {
-      const [statsRes, chartRes, eventsRes] = await Promise.all([
+      const [statsRes, cpuRes, memRes, eventsRes] = await Promise.all([
         apiService.getOverview(),
-        apiService.getMonitoringMetrics(),
+        apiService.getCPUUsage(),
+        apiService.getMemoryUsage(),
         apiService.getEvents()
       ]);
       setStats(statsRes);
-      setChartData(chartRes);
+      
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      
+      setCpuHistory(prev => {
+        const next = [...prev, { time: timeStr, value: cpuRes.value }];
+        return next.slice(-15);
+      });
+      setMemoryHistory(prev => {
+        const next = [...prev, { time: timeStr, value: memRes.value }];
+        return next.slice(-15);
+      });
+      
       setEvents(eventsRes.slice(0, 8)); // Top 8 events
     } catch (err) {
       setError('Failed to fetch dashboard metrics. Please check connection.');
@@ -225,12 +238,12 @@ export const OverviewPage = () => {
             <h3 className="text-sm font-semibold text-gray-600 flex justify-between">
               <span>CPU Utilization</span>
               <span className="text-k8s-blue font-mono font-bold">
-                {chartData.cpu[chartData.cpu.length - 1]?.value || 0}%
+                {cpuHistory[cpuHistory.length - 1]?.value || 0}%
               </span>
             </h3>
             <div className="h-64 border border-gray-100 rounded p-2">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData.cpu} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <LineChart data={cpuHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#F1F1F1" />
                   <XAxis dataKey="time" tick={{ fontSize: 10 }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
@@ -253,12 +266,12 @@ export const OverviewPage = () => {
             <h3 className="text-sm font-semibold text-gray-600 flex justify-between">
               <span>Memory Utilization</span>
               <span className="text-emerald-500 font-mono font-bold">
-                {chartData.memory[chartData.memory.length - 1]?.value || 0}%
+                {memoryHistory[memoryHistory.length - 1]?.value || 0}%
               </span>
             </h3>
             <div className="h-64 border border-gray-100 rounded p-2">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData.memory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <LineChart data={memoryHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#F1F1F1" />
                   <XAxis dataKey="time" tick={{ fontSize: 10 }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
