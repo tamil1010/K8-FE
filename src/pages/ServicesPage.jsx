@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../services/api';
+import API from '../ApiCall/Api';
 import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton } from '../components/SkeletonLoader';
 import { ErrorState, EmptyState } from '../components/ErrorState';
@@ -16,8 +16,16 @@ export const ServicesPage = () => {
     if (showSkeleton) setLoading(true);
     setError(null);
     try {
-      const data = await apiService.getServices(namespace, searchQuery);
-      setServices(data);
+      const nsParam = namespace === 'All Namespaces' ? '' : namespace;
+      const res = await API.get('/services', { params: nsParam ? { namespace: nsParam } : {} });
+      let list = res.data?.data || [];
+      if (searchQuery) {
+        list = list.filter(s =>
+          s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (s.clusterIP && s.clusterIP.toLowerCase().includes(searchQuery.toLowerCase()))
+        );
+      }
+      setServices(list);
     } catch (err) {
       setError('Failed to fetch service resources from cluster API.');
     } finally {

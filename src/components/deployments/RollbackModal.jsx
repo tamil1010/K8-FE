@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertTriangle, RotateCcw, Calendar, HardDrive } from 'lucide-react';
-import { deploymentApi } from '../../services/deploymentApi';
+import API from '../../ApiCall/Api';
 import { useToast } from '../../context/ToastContext';
 
 export const RollbackModal = ({ isOpen, onClose, deployment, onSuccess }) => {
@@ -22,7 +22,8 @@ export const RollbackModal = ({ isOpen, onClose, deployment, onSuccess }) => {
     setLoadingHistory(true);
     setError(null);
     try {
-      const data = await deploymentApi.getDeploymentHistory(deployment.namespace, deployment.name);
+      const res = await API.get(`/deployment-mgmt/${deployment.namespace}/${deployment.name}/history`);
+      const data = res.data?.data || [];
       setHistory(data);
       if (data.length > 1) {
         // Default to second newest revision (previous one)
@@ -43,7 +44,7 @@ export const RollbackModal = ({ isOpen, onClose, deployment, onSuccess }) => {
     setConfirmingRollback(false);
     setError(null);
     try {
-      await deploymentApi.rollbackDeployment(deployment.namespace, deployment.name, selectedRevision);
+      await API.post(`/deployment-mgmt/${deployment.namespace}/${deployment.name}/rollback`, { revision: selectedRevision });
       addToast(`Successfully rolled back to revision ${selectedRevision}!`, 'success');
       onSuccess();
     } catch (err) {

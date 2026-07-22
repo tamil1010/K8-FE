@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
-import { nodeApi } from '../../services/nodeApi';
+import API from '../../ApiCall/Api';
 
 export const NodeEventsModal = ({ isOpen, onClose, node }) => {
   const [events, setEvents] = useState([]);
@@ -18,8 +18,8 @@ export const NodeEventsModal = ({ isOpen, onClose, node }) => {
     if (showSkeleton) setLoading(true);
     setError(null);
     try {
-      const data = await nodeApi.getNodeEvents(node.name);
-      setEvents(data);
+      const res = await API.get(`/nodes/${node.name}/events`);
+      setEvents(res.data?.data || []);
     } catch (err) {
       setError('Failed to fetch events for this node.');
     } finally {

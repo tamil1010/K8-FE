@@ -4,7 +4,7 @@ import {
   Eye, Shield, Activity, Filter, ArrowUpDown, Info, Layers, AlertTriangle,
   MoreVertical, FileCode, FileText, Clipboard
 } from 'lucide-react';
-import { nodeApi } from '../services/nodeApi';
+import API from '../ApiCall/Api';
 import { useToast } from '../context/ToastContext';
 import { useDashboard } from '../context/DashboardContext';
 
@@ -70,7 +70,8 @@ export const NodesPage = () => {
     if (showSkeleton) setLoading(true);
     setError(null);
     try {
-      const data = await nodeApi.getNodes();
+      const res = await API.get('/node-mgmt/nodes');
+      const data = res.data?.data || [];
       setNodes(data);
       setCurrentPage(1);
     } catch (err) {

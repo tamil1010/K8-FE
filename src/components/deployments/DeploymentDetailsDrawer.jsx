@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertTriangle, Calendar, Info, Shield, Layers, HelpCircle } from 'lucide-react';
-import { deploymentApi } from '../../services/deploymentApi';
+import API from '../../ApiCall/Api';
 
 export const DeploymentDetailsDrawer = ({ isOpen, onClose, deployment }) => {
   const [details, setDetails] = useState(null);
@@ -17,8 +17,8 @@ export const DeploymentDetailsDrawer = ({ isOpen, onClose, deployment }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await deploymentApi.getDeploymentDetails(deployment.namespace, deployment.name);
-      setDetails(data);
+      const res = await API.get(`/deployment-mgmt/${deployment.namespace}/${deployment.name}`);
+      setDetails(res.data?.data);
     } catch (err) {
       setError('Failed to fetch detailed deployment specifications.');
     } finally {

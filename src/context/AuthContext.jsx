@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { apiService } from '../services/api';
+import API from '../ApiCall/Api';
 
 const AuthContext = createContext(null);
 
@@ -31,15 +31,19 @@ export const AuthProvider = ({ children }) => {
   });
 
   const login = async (username, password) => {
-    const res = await apiService.login(username, password);
+    const response = await API.post('/auth/login', { username, password });
+    const res = response.data;
     if (res && res.success) {
       const { token, username: retUsername, role } = res.data;
-      setIsAuthenticated(true);
       const userData = { username: retUsername, role };
-      setUser(userData);
+      
+      // Persist to storage BEFORE updating React state to avoid race conditions
       localStorage.setItem('k8s_authenticated', 'true');
       localStorage.setItem('k8s_token', token);
       localStorage.setItem('k8s_user', JSON.stringify(userData));
+      
+      setIsAuthenticated(true);
+      setUser(userData);
       return true;
     } else {
       throw new Error(res?.message || 'Authentication failed');

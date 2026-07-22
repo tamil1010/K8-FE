@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../services/api';
+import API from '../ApiCall/Api';
 import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton } from '../components/SkeletonLoader';
 import { ErrorState } from '../components/ErrorState';
@@ -18,11 +18,22 @@ export const RbacPage = () => {
     if (showSkeleton) setLoading(true);
     setError(null);
     try {
-      const data = await apiService.getRbacData(namespace);
+      const [rolesRes, bindingsRes, sasRes] = await Promise.all([
+        API.get('/rbac/roles'),
+        API.get('/rbac/rolebindings'),
+        API.get('/rbac/serviceaccounts')
+      ]);
+      
+      const filterByNamespace = (list) => {
+        if (!list) return [];
+        if (namespace === 'All Namespaces') return list;
+        return list.filter(item => item.namespace && item.namespace.toLowerCase() === namespace.toLowerCase());
+      };
+
       setRbacData({
-        roles: data.roles || [],
-        bindings: data.bindings || [],
-        serviceAccounts: data.serviceAccounts || []
+        roles: filterByNamespace(rolesRes.data?.data) || [],
+        bindings: filterByNamespace(bindingsRes.data?.data) || [],
+        serviceAccounts: filterByNamespace(sasRes.data?.data) || []
       });
     } catch (err) {
       setError('Failed to fetch RBAC security parameters.');

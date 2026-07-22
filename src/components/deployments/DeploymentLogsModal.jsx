@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertTriangle, Clipboard, Download, RefreshCw, Search } from 'lucide-react';
-import { deploymentApi } from '../../services/deploymentApi';
+import API from '../../ApiCall/Api';
 
 export const DeploymentLogsModal = ({ isOpen, onClose, deployment }) => {
   const [logs, setLogs] = useState('');
@@ -19,8 +19,8 @@ export const DeploymentLogsModal = ({ isOpen, onClose, deployment }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await deploymentApi.getDeploymentLogs(deployment.namespace, deployment.name);
-      setLogs(data);
+      const res = await API.get(`/deployment-mgmt/${deployment.namespace}/${deployment.name}/logs`);
+      setLogs(res.data?.data?.logs || '');
     } catch (err) {
       setError('Failed to fetch deployment container logs.');
     } finally {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertTriangle, Plus, Minus } from 'lucide-react';
-import { deploymentApi } from '../../services/deploymentApi';
+import API from '../../ApiCall/Api';
 import { useToast } from '../../context/ToastContext';
 
 export const ScaleDeploymentModal = ({ isOpen, onClose, deployment, onSuccess }) => {
@@ -26,7 +26,7 @@ export const ScaleDeploymentModal = ({ isOpen, onClose, deployment, onSuccess })
     setLoading(true);
     setError(null);
     try {
-      await deploymentApi.scaleDeployment(deployment.namespace, deployment.name, replicas);
+      await API.patch(`/deployment-mgmt/${deployment.namespace}/${deployment.name}/scale`, { replicas });
       addToast(`Scaled deployment "${deployment.name}" to ${replicas} replicas.`, 'success');
       onSuccess();
     } catch (err) {

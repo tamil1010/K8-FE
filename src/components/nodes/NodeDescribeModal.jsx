@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertTriangle, Clipboard, Check } from 'lucide-react';
-import { nodeApi } from '../../services/nodeApi';
+import API from '../../ApiCall/Api';
 
 export const NodeDescribeModal = ({ isOpen, onClose, node }) => {
   const [describeText, setDescribeText] = useState('');
@@ -18,8 +18,8 @@ export const NodeDescribeModal = ({ isOpen, onClose, node }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await nodeApi.describeNode(node.name);
-      setDescribeText(data);
+      const res = await API.get(`/nodes/${node.name}/describe`);
+      setDescribeText(res.data?.data);
     } catch (err) {
       setError('Failed to describe node resource.');
     } finally {

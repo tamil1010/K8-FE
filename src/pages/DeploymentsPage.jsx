@@ -4,8 +4,7 @@ import {
   Eye, FileText, Microscope, RotateCcw, Trash2,
   AlertTriangle, Loader2, Filter, Plus, FileCode, SlidersHorizontal, ArrowUpDown
 } from 'lucide-react';
-import { deploymentApi } from '../services/deploymentApi';
-import { podApi } from '../services/podApi'; // to fetch namespaces
+import API from '../ApiCall/Api';
 import { useToast } from '../context/ToastContext';
 import { useDashboard } from '../context/DashboardContext';
 
@@ -49,39 +48,32 @@ export const DeploymentsPage = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  // ── Filters & Sorting ──────────────────────────────────────────────────────
-  const [selectedNS, setSelectedNS] = useState(globalNS || 'default');
+  // ── Filters & Search ────────────────────────────────────────────────────────
+  const [selectedNS, setSelectedNS] = useState('All Namespaces');
   const [searchQuery, setSearchQuery] = useState('');
-  const [healthFilter, setHealthFilter] = useState('All');
-  const [sortBy, setSortBy] = useState('name'); // 'name', 'age', 'replicas', 'namespace'
-  const [sortOrder, setSortOrder] = useState('asc'); // 'asc', 'desc'
-
-  // ── Pagination ─────────────────────────────────────────────────────────────
+  const [statusFilter, setStatusFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // ── Modals & Drawers ────────────────────────────────────────────────────────
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [scaleTarget, setScaleTarget] = useState(null);
-  const [rollbackTarget, setRollbackTarget] = useState(null);
-  const [yamlTarget, setYamlTarget] = useState(null);
-  const [logsTarget, setLogsTarget] = useState(null);
-  const [detailsTarget, setDetailsTarget] = useState(null);
+  // Sync with topbar dropdown
+  useEffect(() => {
+    setSelectedNS(globalNS);
+  }, [globalNS]);
 
-  // ── Confirm dialog states ──────────────────────────────────────────────────
+  // ── Modals & Actions state ──────────────────────────────────────────────────
+  const [activeModal, setActiveModal] = useState(null); // 'create' | 'scale' | 'rollback' | 'yaml' | 'logs' | 'details'
+  const [activeDeployment, setActiveDeployment] = useState(null);
+  
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [restartTarget, setRestartTarget] = useState(null);
+  
   const [deletingName, setDeletingName] = useState(null);
   const [restartingName, setRestartingName] = useState(null);
-
-  // Keep in sync with Layout namespace changes
-  useEffect(() => {
-    if (globalNS) setSelectedNS(globalNS);
-  }, [globalNS]);
 
   // Fetch all cluster namespaces
   const fetchNamespaces = useCallback(async () => {
     try {
-      const ns = await podApi.getNamespaces();
+      const res = await API.get('/pod-mgmt/namespaces');
+      const ns = res.data?.data || ['All Namespaces'];
       setNamespaces(ns);
     } catch (_err) {
       // defaults already set
@@ -93,7 +85,9 @@ export const DeploymentsPage = () => {
     if (showSkeleton) setLoading(true);
     setError(null);
     try {
-      const data = await deploymentApi.getDeployments(selectedNS);
+      const nsParam = selectedNS === 'All Namespaces' ? '' : selectedNS;
+      const res = await API.get('/deployment-mgmt/deployments', { params: nsParam ? { namespace: nsParam } : {} });
+      const data = res.data?.data || [];
       setDeployments(data);
       setCurrentPage(1);
     } catch (err) {
@@ -153,7 +147,7 @@ export const DeploymentsPage = () => {
     setDeletingName(deploy.name);
     setDeleteTarget(null);
     try {
-      await deploymentApi.deleteDeployment(deploy.namespace, deploy.name);
+      await API.delete(`/deployment-mgmt/${deploy.namespace}/${deploy.name}`);
       addToast(`Deployment "${deploy.name}" deleted successfully.`, 'success');
       fetchDeployments(false);
     } catch (err) {
@@ -169,7 +163,7 @@ export const DeploymentsPage = () => {
     setRestartingName(deploy.name);
     setRestartTarget(null);
     try {
-      await deploymentApi.restartDeployment(deploy.namespace, deploy.name);
+      await API.post(`/deployment-mgmt/${deploy.namespace}/${deploy.name}/restart`);
       addToast(`Restart triggered for deployment "${deploy.name}".`, 'success');
       setTimeout(() => fetchDeployments(false), 1500);
     } catch (err) {

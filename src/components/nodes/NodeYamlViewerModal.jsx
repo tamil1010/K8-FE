@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertTriangle, Clipboard, Download, Check } from 'lucide-react';
-import { nodeApi } from '../../services/nodeApi';
+import API from '../../ApiCall/Api';
 
 export const NodeYamlViewerModal = ({ isOpen, onClose, node }) => {
   const [yaml, setYaml] = useState('');
@@ -18,7 +18,8 @@ export const NodeYamlViewerModal = ({ isOpen, onClose, node }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await nodeApi.getNodeYaml(node.name);
+      const res = await API.get(`/nodes/${node.name}/yaml`);
+      const data = res.data?.data;
       const yamlStr = jsonToYaml(data);
       setYaml(yamlStr);
     } catch (err) {

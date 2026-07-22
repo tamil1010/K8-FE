@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertTriangle, Clipboard, Download, Check } from 'lucide-react';
-import { deploymentApi } from '../../services/deploymentApi';
+import API from '../../ApiCall/Api';
 
 export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
   const [yaml, setYaml] = useState('');
@@ -18,7 +18,8 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await deploymentApi.getDeploymentYaml(deployment.namespace, deployment.name);
+      const res = await API.get(`/deployment-mgmt/${deployment.namespace}/${deployment.name}/yaml`);
+      const data = res.data?.data;
       // Format YAML (convert JSON response to standard YAML format)
       // Wait, the backend returns raw JSON object. We can convert it to YAML string using jsyaml or standard JSON representation.
       // Since js-yaml isn't in package.json, we can stringify nicely as JSON (as a fallback) or use basic stringification.

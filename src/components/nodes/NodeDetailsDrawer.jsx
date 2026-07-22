@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertTriangle, Shield, Cpu, HardDrive, Layers, Activity, Search, Tag } from 'lucide-react';
-import { nodeApi } from '../../services/nodeApi';
+import API from '../../ApiCall/Api';
 import { PodDetailsModal } from '../pods/PodDetailsModal';
 
 export const NodeDetailsDrawer = ({ isOpen, onClose, node }) => {
@@ -23,12 +23,12 @@ export const NodeDetailsDrawer = ({ isOpen, onClose, node }) => {
     setLoading(true);
     setError(null);
     try {
-      const [detailsData, podsData] = await Promise.all([
-        nodeApi.getNodeDetails(node.name),
-        nodeApi.getNodePods(node.name)
+      const [detailsRes, podsRes] = await Promise.all([
+        API.get(`/nodes/${node.name}`),
+        API.get(`/node-mgmt/nodes/${node.name}/pods`)
       ]);
-      setDetails(detailsData);
-      setPods(podsData);
+      setDetails(detailsRes.data?.data);
+      setPods(podsRes.data?.data || []);
     } catch (err) {
       setError('Failed to fetch node specifications or running pods.');
     } finally {
