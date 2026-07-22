@@ -6,7 +6,7 @@ import { ErrorState, EmptyState } from '../components/ErrorState';
 import { RefreshCw } from 'lucide-react';
 
 export const ServicesPage = () => {
-  const { namespace, searchQuery } = useDashboard();
+  const { namespace, searchQuery, refreshTrigger } = useDashboard();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -28,7 +28,7 @@ export const ServicesPage = () => {
 
   useEffect(() => {
     fetchServices(true);
-  }, [namespace, searchQuery]);
+  }, [namespace, searchQuery, refreshTrigger]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);

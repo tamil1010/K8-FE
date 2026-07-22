@@ -6,7 +6,7 @@ import { ErrorState } from '../components/ErrorState';
 import { ShieldAlert, Users, Key, ExternalLink, Calendar, RefreshCw } from 'lucide-react';
 
 export const RbacPage = () => {
-  const { namespace } = useDashboard();
+  const { namespace, refreshTrigger } = useDashboard();
   
   const [rbacData, setRbacData] = useState({ roles: [], bindings: [], serviceAccounts: [] });
   const [loading, setLoading] = useState(true);
@@ -34,7 +34,7 @@ export const RbacPage = () => {
 
   useEffect(() => {
     fetchRbacData(true);
-  }, [namespace]);
+  }, [namespace, refreshTrigger]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);

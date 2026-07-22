@@ -145,5 +145,23 @@ export const apiService = {
   getMemoryUsage: async () => {
     const res = await axiosInstance.get('/metrics/memory');
     return res.data.data; // returns { value: number }
+  },
+
+  // Get all available contexts (clusters)
+  getClusters: async () => {
+    const res = await axiosInstance.get('/clusters');
+    return res.data.data;
+  },
+
+  // Get current active context (cluster) details
+  getCurrentCluster: async () => {
+    const res = await axiosInstance.get('/clusters/current');
+    return res.data.data;
+  },
+
+  // Switch context (cluster)
+  switchCluster: async (contextName) => {
+    const res = await axiosInstance.post('/clusters/switch', { context: contextName });
+    return res.data;
   }
 };

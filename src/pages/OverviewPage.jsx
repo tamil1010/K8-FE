@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export const OverviewPage = () => {
-  const { namespace } = useDashboard();
+  const { namespace, clusterDetails, refreshTrigger } = useDashboard();
   const { addToast } = useToast();
   
   const [loading, setLoading] = useState(true);
@@ -80,7 +80,7 @@ export const OverviewPage = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshTrigger]);
 
   // Sync event alerts with Toast notifications
   useEffect(() => {
@@ -142,6 +142,42 @@ export const OverviewPage = () => {
           {isRefreshing ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
+
+      {/* Current Cluster Info Card */}
+      {clusterDetails && (
+        <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-lg shadow-md border border-slate-700 text-white p-5">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                </span>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-green-400 bg-green-950/50 px-2 py-0.5 rounded border border-green-800/40">
+                  {clusterDetails.status}
+                </span>
+                <span className="text-xs text-slate-400 font-mono">Version: {clusterDetails.version}</span>
+              </div>
+              <h2 className="text-xl font-bold tracking-tight">{clusterDetails.name}</h2>
+              <p className="text-xs text-slate-400 font-medium">Active Context: <span className="font-mono text-slate-200">{clusterDetails.context}</span></p>
+            </div>
+            <div className="flex items-center gap-6 text-sm">
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded px-4 py-2 text-center min-w-[90px]">
+                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Nodes</p>
+                <p className="text-lg font-bold mt-0.5 text-slate-100">{clusterDetails.nodesCount}</p>
+              </div>
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded px-4 py-2 text-center min-w-[90px]">
+                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Control Planes</p>
+                <p className="text-lg font-bold mt-0.5 text-indigo-300">{clusterDetails.controlPlaneCount}</p>
+              </div>
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded px-4 py-2 text-center min-w-[90px]">
+                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Workers</p>
+                <p className="text-lg font-bold mt-0.5 text-teal-300">{clusterDetails.workerCount}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { podApi } from '../services/podApi';
 import { useToast } from '../context/ToastContext';
+import { useDashboard } from '../context/DashboardContext';
 import { PodDetailsModal }  from '../components/pods/PodDetailsModal';
 import { PodLogsModal }     from '../components/pods/PodLogsModal';
 import { PodDescribeModal } from '../components/pods/PodDescribeModal';
@@ -55,6 +56,7 @@ const isRestartable = (pod) =>
 
 export const PodsPage = () => {
   const { addToast } = useToast();
+  const { refreshTrigger } = useDashboard();
 
   // ── Data ────────────────────────────────────────────────────────────────────
   const [pods,           setPods]           = useState([]);
@@ -117,11 +119,11 @@ export const PodsPage = () => {
   // Initial load: namespaces + pods together
   useEffect(() => {
     fetchNamespaces();
-  }, [fetchNamespaces]);
+  }, [fetchNamespaces, refreshTrigger]);
 
   useEffect(() => {
     fetchPods(true);
-  }, [fetchPods]);
+  }, [fetchPods, refreshTrigger]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
