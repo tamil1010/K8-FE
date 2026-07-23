@@ -1,11 +1,6 @@
 import React, { useState, useEffect } from 'react';
-<<<<<<< Updated upstream
-import { X, Loader2, AlertTriangle, Plus, Minus } from 'lucide-react';
-import API from '../../ApiCall/Api';
-=======
 import { X, Loader2, AlertTriangle, Plus, Minus, Info } from 'lucide-react';
 import { deploymentApi } from '../../services/deploymentApi';
->>>>>>> Stashed changes
 import { useToast } from '../../context/ToastContext';
 
 export const ScaleDeploymentModal = ({ isOpen, onClose, deployment, onSuccess }) => {
@@ -37,13 +32,8 @@ export const ScaleDeploymentModal = ({ isOpen, onClose, deployment, onSuccess })
     setLoading(true);
     setError(null);
     try {
-<<<<<<< Updated upstream
-      await API.patch(`/deployment-mgmt/${deployment.namespace}/${deployment.name}/scale`, { replicas });
-      addToast(`Scaled deployment "${deployment.name}" to ${replicas} replicas.`, 'success');
-=======
       await deploymentApi.scaleDeployment(deployment.namespace, deployment.name, replicas);
       addToast(`Successfully scaled deployment "${deployment.name}" to ${replicas} replicas.`, 'success');
->>>>>>> Stashed changes
       onSuccess();
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Failed to scale deployment.';

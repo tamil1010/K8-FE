@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
-<<<<<<< Updated upstream
-import { X, Loader2, AlertTriangle, Clipboard, Download, Check } from 'lucide-react';
-import API from '../../ApiCall/Api';
-=======
 import { X, Loader2, AlertTriangle, Clipboard, Download, Check, Maximize2, Minimize2, Search } from 'lucide-react';
 import { deploymentApi } from '../../services/deploymentApi';
->>>>>>> Stashed changes
+
 
 export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
   const [yaml, setYaml] = useState('');
@@ -25,18 +21,7 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
     setLoading(true);
     setError(null);
     try {
-<<<<<<< Updated upstream
-      const res = await API.get(`/deployment-mgmt/${deployment.namespace}/${deployment.name}/yaml`);
-      const data = res.data?.data;
-      // Format YAML (convert JSON response to standard YAML format)
-      // Wait, the backend returns raw JSON object. We can convert it to YAML string using jsyaml or standard JSON representation.
-      // Since js-yaml isn't in package.json, we can stringify nicely as JSON (as a fallback) or use basic stringification.
-      // Wait, let's write a simple JSON stringifier formatting or we can convert it to YAML using a basic client-side helper.
-      // Let's import a lightweight YAML converter or stringify JSON representation nicely. A YAML viewer showing YAML is requested.
-      // Let's write a lightweight JSON-to-YAML stringifier in JS to show authentic YAML! It's simple to do for standard K8s objects.
-=======
       const data = await deploymentApi.getDeploymentYaml(deployment.namespace, deployment.name);
->>>>>>> Stashed changes
       const yamlStr = jsonToYaml(data);
       setYaml(yamlStr);
     } catch (err) {

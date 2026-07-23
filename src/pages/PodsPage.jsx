@@ -73,9 +73,10 @@ export const PodsPage = () => {
   }, [contextNS]);
 
   // ── Modal states ─────────────────────────────────────────────────────────────
-  const [activeModal,        setActiveModal]        = useState(null); // 'details' | 'logs' | 'describe'
-  const [activePod,          setActivePod]          = useState(null); // Pod target for modal
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false); // CreatePodModal
+  const [detailsPod,         setDetailsPod]         = useState(null);
+  const [logsPod,            setLogsPod]            = useState(null);
+  const [describePod,        setDescribePod]        = useState(null);
+  const [isCreateModalOpen,  setIsCreateModalOpen]  = useState(false); // CreatePodModal
 
   // ── Confirm dialogs ──────────────────────────────────────────────────────────
   const [deleteTarget,   setDeleteTarget]   = useState(null); // pod to delete

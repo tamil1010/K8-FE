@@ -57,15 +57,12 @@ export const DeploymentsPage = () => {
   // ── Filters & Search ────────────────────────────────────────────────────────
   const [selectedNS, setSelectedNS] = useState('All Namespaces');
   const [searchQuery, setSearchQuery] = useState('');
-<<<<<<< Updated upstream
   const [statusFilter, setStatusFilter] = useState('All');
-  const [currentPage, setCurrentPage] = useState(1);
 
   // Sync with topbar dropdown
   useEffect(() => {
     setSelectedNS(globalNS);
   }, [globalNS]);
-=======
   const [healthFilter, setHealthFilter] = useState('All');
   const [strategyFilter, setStrategyFilter] = useState('All');
   const [ageFilter, setAgeFilter] = useState('All');
@@ -90,7 +87,7 @@ export const DeploymentsPage = () => {
   // ── Auto Refresh ───────────────────────────────────────────────────────────
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState(new Date().toLocaleTimeString());
->>>>>>> Stashed changes
+
 
   // ── Modals & Actions state ──────────────────────────────────────────────────
   const [activeModal, setActiveModal] = useState(null); // 'create' | 'scale' | 'rollback' | 'yaml' | 'logs' | 'details'

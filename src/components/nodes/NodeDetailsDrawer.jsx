@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
-<<<<<<< Updated upstream
 import { X, Loader2, AlertTriangle, Shield, Cpu, HardDrive, Layers, Activity, Search, Tag } from 'lucide-react';
 import API from '../../ApiCall/Api';
-import { PodDetailsModal } from '../pods/PodDetailsModal';
-=======
 import { useNavigate } from 'react-router-dom';
-import { X, Loader2, AlertTriangle, Shield, Cpu, HardDrive, Layers, Activity, Search, Tag, Calendar } from 'lucide-react';
 import { nodeApi } from '../../services/nodeApi';
->>>>>>> Stashed changes
 
 export const NodeDetailsDrawer = ({ isOpen, onClose, node }) => {
   const navigate = useNavigate();
@@ -28,14 +23,13 @@ export const NodeDetailsDrawer = ({ isOpen, onClose, node }) => {
     setLoading(true);
     setError(null);
     try {
-<<<<<<< Updated upstream
+
       const [detailsRes, podsRes] = await Promise.all([
         API.get(`/nodes/${node.name}`),
         API.get(`/node-mgmt/nodes/${node.name}/pods`)
       ]);
       setDetails(detailsRes.data?.data);
       setPods(podsRes.data?.data || []);
-=======
       const [detailsData, podsData, eventsData] = await Promise.all([
         nodeApi.getNodeDetails(node.name),
         nodeApi.getNodePods(node.name),
@@ -44,7 +38,6 @@ export const NodeDetailsDrawer = ({ isOpen, onClose, node }) => {
       setDetails(detailsData);
       setPods(podsData);
       setEvents(eventsData);
->>>>>>> Stashed changes
     } catch (err) {
       setError('Failed to fetch node specifications, pods, or events.');
     } finally {

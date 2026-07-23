@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
-<<<<<<< Updated upstream
-import { X, Loader2, AlertTriangle, Calendar, Info, Shield, Layers, HelpCircle } from 'lucide-react';
-import API from '../../ApiCall/Api';
-=======
 import { X, Loader2, AlertTriangle, Calendar, Info, Shield, Layers, HelpCircle, Activity, Cpu, HardDrive, RefreshCw, FileText, Download, Check, Clipboard } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { deploymentApi } from '../../services/deploymentApi';
 import { PodDetailsModal } from '../pods/PodDetailsModal';
->>>>>>> Stashed changes
 
 export const DeploymentDetailsDrawer = ({ isOpen, onClose, deployment }) => {
   const [details, setDetails] = useState(null);
@@ -37,10 +32,6 @@ export const DeploymentDetailsDrawer = ({ isOpen, onClose, deployment }) => {
     setLoading(true);
     setError(null);
     try {
-<<<<<<< Updated upstream
-      const res = await API.get(`/deployment-mgmt/${deployment.namespace}/${deployment.name}`);
-      setDetails(res.data?.data);
-=======
       const [detailsData, podsData, rsData] = await Promise.all([
         deploymentApi.getDeploymentDetails(deployment.namespace, deployment.name),
         deploymentApi.getDeploymentPods(deployment.namespace, deployment.name),
@@ -49,7 +40,6 @@ export const DeploymentDetailsDrawer = ({ isOpen, onClose, deployment }) => {
       setDetails(detailsData);
       setPods(podsData);
       setReplicaSets(rsData);
->>>>>>> Stashed changes
     } catch (err) {
       setError('Failed to fetch detailed deployment specifications.');
     } finally {
