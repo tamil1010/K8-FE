@@ -1,29 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, AlertTriangle, Clipboard, Download, Check } from 'lucide-react';
-import API from '../../ApiCall/Api';
+import { X, Loader2, AlertTriangle, Clipboard, Download, Check, Maximize2, Minimize2, Search } from 'lucide-react';
+import { serviceApi } from '../../services/serviceApi';
 
-export const NodeYamlViewerModal = ({ isOpen, onClose, node }) => {
+export const ServiceYamlModal = ({ isOpen, onClose, service }) => {
   const [yaml, setYaml] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    if (isOpen && node) {
+    if (isOpen && service) {
       fetchYaml();
     }
-  }, [isOpen, node]);
+  }, [isOpen, service]);
 
   const fetchYaml = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await API.get(`/nodes/${node.name}/yaml`);
-      const data = res.data?.data;
+      const data = await serviceApi.getServiceYaml(service.namespace, service.name);
       const yamlStr = jsonToYaml(data);
       setYaml(yamlStr);
     } catch (err) {
-      setError('Failed to load node YAML.');
+      setError('Failed to load Service YAML manifest.');
     } finally {
       setLoading(false);
     }
@@ -33,11 +34,11 @@ export const NodeYamlViewerModal = ({ isOpen, onClose, node }) => {
     if (obj === null || obj === undefined) return '';
     let yamlStr = '';
     const spaces = ' '.repeat(indent);
-    
+
     if (typeof obj !== 'object') {
       return String(obj);
     }
-    
+
     if (Array.isArray(obj)) {
       if (obj.length === 0) return ' []\n';
       yamlStr += '\n';
@@ -51,12 +52,12 @@ export const NodeYamlViewerModal = ({ isOpen, onClose, node }) => {
       });
       return yamlStr;
     }
-    
+
     const keys = Object.keys(obj);
     if (keys.length === 0) return ' {}\n';
-    
+
     if (indent > 0) yamlStr += '\n';
-    
+
     keys.forEach(key => {
       const value = obj[key];
       if (typeof value === 'object' && value !== null) {
@@ -65,11 +66,11 @@ export const NodeYamlViewerModal = ({ isOpen, onClose, node }) => {
         yamlStr += `${spaces}${key}: ${value}\n`;
       }
     });
-    
+
     return yamlStr;
   };
 
-  if (!isOpen || !node) return null;
+  if (!isOpen || !service) return null;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(yaml);
@@ -81,29 +82,76 @@ export const NodeYamlViewerModal = ({ isOpen, onClose, node }) => {
     const element = document.createElement("a");
     const file = new Blob([yaml], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
-    element.download = `${node.name}-node.yaml`;
+    element.download = `${service.name}-service.yaml`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
   };
 
+  const renderHighlightedContent = () => {
+    if (!searchTerm.trim()) {
+      return <pre className="whitespace-pre-wrap">{yaml}</pre>;
+    }
+    const escapedTerm = searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`(${escapedTerm})`, 'gi');
+    const parts = yaml.split(regex);
+    return (
+      <pre className="whitespace-pre-wrap">
+        {parts.map((part, index) =>
+          regex.test(part) ? (
+            <mark key={index} className="bg-amber-400 text-gray-900 rounded px-0.5 font-bold">
+              {part}
+            </mark>
+          ) : (
+            part
+          )
+        )}
+      </pre>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={onClose} />
-      
-      <div className="relative z-10 bg-white rounded-lg shadow-2xl w-full max-w-3xl flex flex-col h-[80vh]">
+
+      <div className={`relative z-10 bg-white rounded-lg shadow-2xl flex flex-col transition-all duration-300 ${
+        isFullscreen ? 'w-full h-full p-2' : 'w-full max-w-4xl h-[80vh]'
+      }`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Node Resource (YAML)</h2>
-            <p className="text-xs text-gray-500 font-mono">{node.name}</p>
+            <h2 className="text-lg font-bold text-gray-900">Service Config (YAML)</h2>
+            <p className="text-xs text-gray-500 font-mono">{service.namespace}/{service.name}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Search Input */}
+            <div className="relative w-48 select-none">
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2" />
+              <input
+                type="text"
+                placeholder="Search in YAML..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-2.5 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:border-blue-500 bg-white"
+              />
+            </div>
+
+            {/* Fullscreen Button */}
+            <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="p-1.5 rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
+              title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -111,7 +159,7 @@ export const NodeYamlViewerModal = ({ isOpen, onClose, node }) => {
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full space-y-2">
               <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
-              <span className="text-sm text-gray-400">Fetching manifest...</span>
+              <span className="text-sm text-gray-400">Fetching Service YAML...</span>
             </div>
           ) : error ? (
             <div className="flex items-start gap-3 bg-red-900/30 border border-red-700/50 rounded p-4 text-red-300">
@@ -119,7 +167,7 @@ export const NodeYamlViewerModal = ({ isOpen, onClose, node }) => {
               <p>{error}</p>
             </div>
           ) : (
-            <pre className="whitespace-pre-wrap">{yaml}</pre>
+            renderHighlightedContent()
           )}
         </div>
 
@@ -133,7 +181,7 @@ export const NodeYamlViewerModal = ({ isOpen, onClose, node }) => {
               className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Clipboard className="w-3.5 h-3.5 text-gray-500" />}
-              {copied ? 'Copied' : 'Copy Spec'}
+              {copied ? 'Copied' : 'Copy YAML'}
             </button>
             <button
               type="button"

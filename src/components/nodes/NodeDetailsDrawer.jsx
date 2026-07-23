@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertTriangle, Shield, Cpu, HardDrive, Layers, Activity, Search, Tag } from 'lucide-react';
+import API from '../../ApiCall/Api';
+import { useNavigate } from 'react-router-dom';
 import { nodeApi } from '../../services/nodeApi';
-import { PodDetailsModal } from '../pods/PodDetailsModal';
 
 export const NodeDetailsDrawer = ({ isOpen, onClose, node }) => {
+  const navigate = useNavigate();
   const [details, setDetails] = useState(null);
   const [pods, setPods] = useState([]);
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [labelSearch, setLabelSearch] = useState('');
-  
-  // Selected Pod details state (to show nested details modal)
-  const [selectedPod, setSelectedPod] = useState(null);
 
   useEffect(() => {
     if (isOpen && node) {
@@ -23,14 +23,23 @@ export const NodeDetailsDrawer = ({ isOpen, onClose, node }) => {
     setLoading(true);
     setError(null);
     try {
-      const [detailsData, podsData] = await Promise.all([
+
+      const [detailsRes, podsRes] = await Promise.all([
+        API.get(`/nodes/${node.name}`),
+        API.get(`/node-mgmt/nodes/${node.name}/pods`)
+      ]);
+      setDetails(detailsRes.data?.data);
+      setPods(podsRes.data?.data || []);
+      const [detailsData, podsData, eventsData] = await Promise.all([
         nodeApi.getNodeDetails(node.name),
-        nodeApi.getNodePods(node.name)
+        nodeApi.getNodePods(node.name),
+        nodeApi.getNodeEvents(node.name)
       ]);
       setDetails(detailsData);
       setPods(podsData);
+      setEvents(eventsData);
     } catch (err) {
-      setError('Failed to fetch node specifications or running pods.');
+      setError('Failed to fetch node specifications, pods, or events.');
     } finally {
       setLoading(false);
     }
@@ -41,24 +50,20 @@ export const NodeDetailsDrawer = ({ isOpen, onClose, node }) => {
   // Calculate CPU and Memory usage percentages for progress bars
   const cpuUsagePct = details?.cpuUsagePct !== 'N/A' && details?.cpuUsagePct !== undefined ? details.cpuUsagePct : 0;
   const memUsagePct = details?.memUsagePct !== 'N/A' && details?.memUsagePct !== undefined ? details.memUsagePct : 0;
+  const podsUsagePct = details && details.maxPods ? Math.round(((details.runningPods || pods.length) / details.maxPods) * 100) : 0;
 
-  const getConditionColor = (type, status) => {
-    if (type === 'Ready') {
-      return status === 'True' 
-        ? 'bg-green-50 text-green-700 border-green-200' 
-        : 'bg-red-50 text-red-700 border-red-200';
-    }
-    // Pressure conditions (MemoryPressure, DiskPressure, PIDPressure)
-    // and NetworkUnavailable are bad if "True"
-    if (type.includes('Pressure') || type === 'NetworkUnavailable') {
-      return status === 'True'
-        ? 'bg-red-50 text-red-700 border-red-200'
-        : 'bg-green-50 text-green-700 border-green-200';
-    }
-    return status === 'True'
-      ? 'bg-amber-50 text-amber-700 border-amber-200'
-      : 'bg-gray-50 text-gray-700 border-gray-200';
+  const getConditionStatus = (type) => {
+    const cond = details?.conditions?.find(c => c.type === type);
+    return cond ? cond.status : 'Unknown';
   };
+
+  const conditionList = [
+    { type: 'Ready', expected: 'True', label: 'Ready' },
+    { type: 'MemoryPressure', expected: 'False', label: 'MemoryPressure' },
+    { type: 'DiskPressure', expected: 'False', label: 'DiskPressure' },
+    { type: 'PIDPressure', expected: 'False', label: 'PIDPressure' },
+    { type: 'NetworkUnavailable', expected: 'False', label: 'NetworkUnavailable' },
+  ];
 
   // Filter labels
   const filteredLabels = details ? Object.entries(details.labels || {}).filter(([k, v]) => 
@@ -106,94 +111,124 @@ export const NodeDetailsDrawer = ({ isOpen, onClose, node }) => {
             ) : details ? (
               <div className="space-y-6 text-sm">
                 
-                {/* ── Resource Usage Charts ──────────────── */}
-                <Section title="Resource Utilization" icon={<Activity className="w-4 h-4" />}>
+                {/* ── Current Usage (Progress Bars) ──────────────── */}
+                <Section title="Current Usage" icon={<Activity className="w-4 h-4" />}>
                   <div className="space-y-4">
                     {/* CPU Usage */}
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs font-semibold">
                         <span className="text-gray-600 flex items-center gap-1"><Cpu className="w-3.5 h-3.5" /> CPU Usage</span>
-                        <span className="font-mono text-gray-800">{cpuUsagePct}% of {details.cpuAllocatable}</span>
+                        {details?.cpuUsagePct !== undefined && details?.cpuUsagePct !== null && details?.cpuUsagePct !== 'N/A' ? (
+                          <span className="font-mono text-gray-800">{details.cpuUsagePct}% of {details.cpuAllocatable}</span>
+                        ) : (
+                          <span className="font-mono text-gray-400">N/A</span>
+                        )}
                       </div>
-                      <div className="w-full bg-gray-100 rounded-full h-3.5 overflow-hidden border border-gray-200">
-                        <div 
-                          className={`h-full transition-all duration-500 ${
-                            cpuUsagePct > 85 ? 'bg-red-500' : cpuUsagePct > 60 ? 'bg-amber-500' : 'bg-green-500'
-                          }`}
-                          style={{ width: `${cpuUsagePct}%` }}
-                        />
-                      </div>
-                      <div className="text-[10px] text-gray-400 flex justify-between font-mono">
-                        <span>Capacity: {details.cpuCapacity}</span>
-                        <span>Allocatable: {details.cpuAllocatable}</span>
-                      </div>
+                      {details?.cpuUsagePct !== undefined && details?.cpuUsagePct !== null && details?.cpuUsagePct !== 'N/A' && (
+                        <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-200">
+                          <div 
+                            className={`h-full transition-all duration-500 ${
+                              details.cpuUsagePct > 85 ? 'bg-red-500' : details.cpuUsagePct > 60 ? 'bg-amber-500' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${details.cpuUsagePct}%` }}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* Memory Usage */}
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs font-semibold">
                         <span className="text-gray-600 flex items-center gap-1"><HardDrive className="w-3.5 h-3.5" /> Memory Usage</span>
-                        <span className="font-mono text-gray-800">{memUsagePct}% of {details.memoryAllocatable}</span>
+                        {details?.memUsagePct !== undefined && details?.memUsagePct !== null && details?.memUsagePct !== 'N/A' ? (
+                          <span className="font-mono text-gray-800">{details.memUsagePct}% of {details.memoryAllocatable}</span>
+                        ) : (
+                          <span className="font-mono text-gray-400">N/A</span>
+                        )}
                       </div>
-                      <div className="w-full bg-gray-100 rounded-full h-3.5 overflow-hidden border border-gray-200">
-                        <div 
-                          className={`h-full transition-all duration-500 ${
-                            memUsagePct > 85 ? 'bg-red-500' : memUsagePct > 60 ? 'bg-amber-500' : 'bg-green-500'
-                          }`}
-                          style={{ width: `${memUsagePct}%` }}
-                        />
-                      </div>
-                      <div className="text-[10px] text-gray-400 flex justify-between font-mono">
-                        <span>Capacity: {details.memoryCapacity}</span>
-                        <span>Allocatable: {details.memoryAllocatable}</span>
-                      </div>
+                      {details?.memUsagePct !== undefined && details?.memUsagePct !== null && details?.memUsagePct !== 'N/A' && (
+                        <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-200">
+                          <div 
+                            className={`h-full transition-all duration-500 ${
+                              details.memUsagePct > 85 ? 'bg-red-500' : details.memUsagePct > 60 ? 'bg-amber-500' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${details.memUsagePct}%` }}
+                          />
+                        </div>
+                      )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 bg-gray-50 border border-gray-200 rounded p-3 text-xs">
-                      <div>
-                        <span className="font-semibold text-gray-500 block">Pods Capacity:</span>
-                        <span className="font-mono font-bold text-gray-900">{details.runningPods || pods.length} / {details.maxPods || 110} Pods</span>
+                    {/* Pod Count */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs font-semibold">
+                        <span className="text-gray-600 flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> Pod Count</span>
+                        {details?.maxPods ? (
+                          <span className="font-mono text-gray-800">{podsUsagePct}% ({details.runningPods || pods.length} / {details.maxPods} Pods)</span>
+                        ) : (
+                          <span className="font-mono text-gray-400">N/A</span>
+                        )}
                       </div>
-                      <div>
-                        <span className="font-semibold text-gray-500 block">Ephemeral Storage:</span>
-                        <span className="font-mono font-bold text-gray-900">{details.ephemeralStorage || 'N/A'}</span>
-                      </div>
+                      {details?.maxPods ? (
+                        <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-200">
+                          <div 
+                            className={`h-full transition-all duration-500 ${
+                              podsUsagePct > 85 ? 'bg-red-500' : podsUsagePct > 60 ? 'bg-amber-500' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${podsUsagePct}%` }}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </Section>
 
-                {/* ── Metadata & Node Info ───────────────── */}
-                <Section title="General Information" icon={<Shield className="w-4 h-4" />}>
+                {/* ── Basic Information ───────────────── */}
+                <Section title="Basic Information" icon={<Shield className="w-4 h-4" />}>
                   <Row label="Node Name" value={details.name} />
-                  <Row label="Role" value={details.role} />
-                  <Row label="Status" value={details.status} />
+                  <Row label="Hostname" value={details.hostname} />
                   <Row label="Internal IP" value={details.internalIP} />
                   <Row label="External IP" value={details.externalIP || '<none>'} />
-                  <Row label="Hostname" value={details.hostname} />
-                  <Row label="OS Image" value={details.osImage} />
                   <Row label="Architecture" value={details.architecture} />
-                  <Row label="Created" value={new Date(details.creationTimestamp).toLocaleString()} />
+                  <Row label="OS" value={details.osImage} />
+                  <Row label="Kernel Version" value={details.kernelVersion} />
+                  <Row label="Container Runtime" value={details.containerRuntimeVersion} />
+                  <Row label="Kubernetes Version" value={details.kubeletVersion} />
+                </Section>
+
+                {/* ── Capacity ───────────────── */}
+                <Section title="Capacity" icon={<HardDrive className="w-4 h-4" />}>
+                  <Row label="Total CPU" value={details.cpuCapacity} />
+                  <Row label="Total Memory" value={details.memoryCapacity} />
+                  <Row label="Maximum Pods" value={details.maxPods || 110} />
                 </Section>
 
                 {/* ── Node Conditions ────────────────────── */}
                 <Section title="Node Conditions" icon={<Activity className="w-4 h-4" />}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {details.conditions.map((c, i) => (
-                      <div key={i} className={`p-3 rounded border text-center flex flex-col justify-center items-center ${getConditionColor(c.type, c.status)}`}>
-                        <span className="text-xs font-bold uppercase tracking-wider">{c.type}</span>
-                        <span className="text-[10px] font-mono mt-1 opacity-80">{c.reason || 'N/A'}</span>
-                        <span className="text-[9px] font-semibold mt-1 bg-white/60 px-1.5 py-0.5 rounded">Status: {c.status}</span>
-                      </div>
-                    ))}
+                  <div className="flex flex-wrap gap-2.5">
+                    {conditionList.map((item, i) => {
+                      const status = getConditionStatus(item.type);
+                      const isHealthy = status === item.expected;
+                      return (
+                        <span 
+                          key={i} 
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${
+                            isHealthy 
+                              ? 'bg-green-50 text-green-700 border-green-200' 
+                              : 'bg-red-50 text-red-700 border-red-200'
+                          }`}
+                        >
+                          {item.label} {isHealthy ? '✅' : '❌'}
+                        </span>
+                      );
+                    })}
                   </div>
                 </Section>
 
-                {/* ── Labels & Taints ────────────────────── */}
-                <Section title="Labels & Taints" icon={<Tag className="w-4 h-4" />}>
-                  {/* Labels Section */}
+                {/* ── Labels ────────────────────── */}
+                <Section title="Labels" icon={<Tag className="w-4 h-4" />}>
                   <div className="py-1">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs font-semibold text-gray-500">Labels ({Object.keys(details.labels).length})</span>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-semibold text-gray-500">Node Labels ({Object.keys(details.labels || {}).length})</span>
                       <div className="relative w-36">
                         <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1.5" />
                         <input
@@ -205,80 +240,120 @@ export const NodeDetailsDrawer = ({ isOpen, onClose, node }) => {
                         />
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto p-1.5 bg-gray-50 rounded border border-gray-200">
-                      {filteredLabels.length > 0 ? (
-                        filteredLabels.map(([k, v]) => (
-                          <span key={k} className="inline-block bg-white border border-gray-200 text-gray-600 font-mono text-[9px] px-1.5 py-0.5 rounded shadow-sm">
-                            {k}: <span className="text-gray-900 font-semibold">{v}</span>
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-gray-400 italic">No labels match filter</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Taints Section */}
-                  <div className="py-1">
-                    <span className="block text-xs font-semibold text-gray-500 mb-1">Taints:</span>
-                    {details.taints && details.taints.length > 0 ? (
-                      <div className="flex flex-wrap gap-1 p-1.5 bg-gray-50 rounded border border-gray-200 font-mono text-[9px]">
-                        {details.taints.map((t, idx) => (
-                          <span key={idx} className="inline-block bg-red-50 border border-red-100 text-red-700 px-2 py-0.5 rounded shadow-sm">
-                            {t.key}{t.value ? `=${t.value}` : ''}:{t.effect}
+                    {Object.keys(details.labels || {}).length === 0 ? (
+                      <div className="text-xs text-gray-400 italic bg-gray-50 p-3 rounded border border-gray-200 text-center">
+                        No Labels
+                      </div>
+                    ) : filteredLabels.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded border border-gray-200 max-h-36 overflow-y-auto">
+                        {filteredLabels.map(([k, v]) => (
+                          <span key={k} className="inline-block bg-white border border-gray-200 text-gray-600 font-mono text-[10px] px-2.5 py-1 rounded-full shadow-sm">
+                            {k}={v}
                           </span>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-400 italic">No taints applied</p>
+                      <div className="text-xs text-gray-400 italic bg-gray-50 p-3 rounded border border-gray-200 text-center">
+                        No labels match search query
+                      </div>
                     )}
                   </div>
                 </Section>
 
-                {/* ── System Information ─────────────────── */}
-                <Section title="System Information" icon={<Shield className="w-4 h-4" />}>
-                  <Row label="Kernel Version" value={details.kernelVersion} />
-                  <Row label="OS Image" value={details.osImage} />
-                  <Row label="Container Runtime Version" value={details.containerRuntimeVersion} />
-                  <Row label="Kubelet Version" value={details.kubeletVersion} />
-                  <Row label="Kube-Proxy Version" value={details.kubeProxyVersion} />
-                  <Row label="Machine ID" value={details.systemInfo?.machineID} />
-                  <Row label="Boot ID" value={details.systemInfo?.bootID} />
-                  <Row label="System UUID" value={details.systemInfo?.systemUUID} />
+                {/* ── Taints ────────────────────── */}
+                <Section title="Taints" icon={<Tag className="w-4 h-4" />}>
+                  {details.taints && details.taints.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded border border-gray-200 font-mono text-[10px]">
+                      {details.taints.map((t, idx) => (
+                        <span key={idx} className="inline-block bg-red-50 border border-red-100 text-red-700 px-2.5 py-1 rounded shadow-sm">
+                          {t.key}{t.value ? `=${t.value}` : ''}:{t.effect}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 italic bg-gray-50 p-3 rounded border border-gray-200 text-center">
+                      No Taints
+                    </div>
+                  )}
                 </Section>
 
                 {/* ── Running Pods on Node ───────────────── */}
-                <Section title="Pods Running On Node" icon={<Layers className="w-4 h-4" />}>
+                <Section title="Running Pods" icon={<Layers className="w-4 h-4" />}>
                   {pods.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic">No pods running on this node.</p>
+                    <div className="text-xs text-gray-400 italic bg-gray-50 p-3 rounded border border-gray-200 text-center">
+                      No Pods
+                    </div>
                   ) : (
                     <div className="border border-gray-200 rounded overflow-hidden">
                       <table className="w-full text-left text-xs divide-y divide-gray-200">
                         <thead className="bg-gray-50 font-semibold text-gray-500">
                           <tr>
-                            <th className="px-4 py-2">Pod Name</th>
-                            <th className="px-4 py-2">Namespace</th>
-                            <th className="px-4 py-2">Status</th>
-                            <th className="px-4 py-2 text-right">Restarts</th>
+                            <th className="px-4 py-2.5">Pod Name</th>
+                            <th className="px-4 py-2.5">Namespace</th>
+                            <th className="px-4 py-2.5">Status</th>
+                            <th className="px-4 py-2.5 text-right">Restart Count</th>
+                            <th className="px-4 py-2.5 text-right">Age</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 font-mono text-[11px] text-gray-700 bg-white">
                           {pods.map((pod, i) => (
                             <tr 
                               key={i} 
-                              onClick={() => setSelectedPod(pod)}
+                              onClick={() => {
+                                onClose();
+                                navigate('/pods');
+                              }}
                               className="hover:bg-blue-50/40 cursor-pointer transition-colors"
                             >
-                              <td className="px-4 py-2 font-semibold text-k8s-blue hover:underline break-all max-w-[200px]">{pod.name}</td>
-                              <td className="px-4 py-2 text-gray-500">{pod.namespace}</td>
-                              <td className="px-4 py-2">
+                              <td className="px-4 py-2.5 font-semibold text-k8s-blue hover:underline break-all max-w-[180px]">{pod.name}</td>
+                              <td className="px-4 py-2.5 text-gray-500">{pod.namespace}</td>
+                              <td className="px-4 py-2.5">
                                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
                                   pod.status === 'Running' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
                                 }`}>
                                   {pod.status}
                                 </span>
                               </td>
-                              <td className="px-4 py-2 text-right text-gray-800 font-bold">{pod.restarts}</td>
+                              <td className="px-4 py-2.5 text-right text-gray-800 font-bold">{pod.restarts}</td>
+                              <td className="px-4 py-2.5 text-right text-gray-500">{pod.age || 'N/A'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Section>
+
+                {/* ── Recent Events ───────────────── */}
+                <Section title="Recent Events" icon={<Calendar className="w-4 h-4" />}>
+                  {events.length === 0 ? (
+                    <div className="text-xs text-gray-400 italic bg-gray-50 p-3 rounded border border-gray-200 text-center">
+                      No Events
+                    </div>
+                  ) : (
+                    <div className="border border-gray-200 rounded overflow-hidden">
+                      <table className="w-full text-left text-xs divide-y divide-gray-200">
+                        <thead className="bg-gray-50 font-semibold text-gray-500">
+                          <tr>
+                            <th className="px-4 py-2.5">Type</th>
+                            <th className="px-4 py-2.5">Reason</th>
+                            <th className="px-4 py-2.5">Message</th>
+                            <th className="px-4 py-2.5 text-right">Time</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 font-mono text-[11px] text-gray-700 bg-white">
+                          {events.map((e, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-2.5">
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                  e.type === 'Normal' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-red-50 text-red-700 border border-red-200'
+                                }`}>
+                                  {e.type}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 font-semibold text-gray-800">{e.reason}</td>
+                              <td className="px-4 py-2.5 text-gray-600 break-words max-w-[220px]">{e.message}</td>
+                              <td className="px-4 py-2.5 text-right text-gray-500 whitespace-nowrap">{e.lastSeen || e.age || 'N/A'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -303,14 +378,6 @@ export const NodeDetailsDrawer = ({ isOpen, onClose, node }) => {
 
         </div>
       </div>
-
-      {/* Render nested PodDetailsModal if a pod is clicked in the table */}
-      {selectedPod && (
-        <PodDetailsModal
-          pod={selectedPod}
-          onClose={() => setSelectedPod(null)}
-        />
-      )}
     </div>
   );
 };
@@ -326,7 +393,7 @@ const Section = ({ title, icon, children }) => (
 );
 
 const Row = ({ label, value }) => (
-  <div className="flex justify-between py-1 border-b border-gray-50 text-xs">
+  <div className="flex justify-between py-1 border-b border-b-gray-50 text-xs">
     <span className="font-semibold text-gray-500 select-none">{label}:</span>
     <span className="font-mono text-gray-800 break-all pl-4 text-right">{value ?? 'N/A'}</span>
   </div>

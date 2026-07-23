@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, AlertTriangle, Clipboard, Download, Check, Maximize2, Minimize2, Search } from 'lucide-react';
+import { X, Loader2, AlertTriangle, Clipboard, Check, Maximize2, Minimize2, Search } from 'lucide-react';
 import { deploymentApi } from '../../services/deploymentApi';
 
-
-export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
-  const [yaml, setYaml] = useState('');
+export const DeploymentDescribeModal = ({ isOpen, onClose, deployment }) => {
+  const [describeText, setDescribeText] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -13,92 +12,41 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
 
   useEffect(() => {
     if (isOpen && deployment) {
-      fetchYaml();
+      fetchDescribe();
     }
   }, [isOpen, deployment]);
 
-  const fetchYaml = async () => {
+  const fetchDescribe = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await deploymentApi.getDeploymentYaml(deployment.namespace, deployment.name);
-      const yamlStr = jsonToYaml(data);
-      setYaml(yamlStr);
+      const data = await deploymentApi.describeDeployment(deployment.namespace, deployment.name);
+      setDescribeText(data);
     } catch (err) {
-      setError('Failed to load deployment YAML.');
+      setError('Failed to describe deployment.');
     } finally {
       setLoading(false);
     }
   };
 
-  const jsonToYaml = (obj, indent = 0) => {
-    if (obj === null || obj === undefined) return '';
-    let yamlStr = '';
-    const spaces = ' '.repeat(indent);
-    
-    if (typeof obj !== 'object') {
-      return String(obj);
-    }
-    
-    if (Array.isArray(obj)) {
-      if (obj.length === 0) return ' []\n';
-      yamlStr += '\n';
-      obj.forEach(item => {
-        if (typeof item === 'object') {
-          const itemYaml = jsonToYaml(item, indent + 2);
-          yamlStr += `${spaces}- ${itemYaml.trimStart()}`;
-        } else {
-          yamlStr += `${spaces}- ${item}\n`;
-        }
-      });
-      return yamlStr;
-    }
-    
-    const keys = Object.keys(obj);
-    if (keys.length === 0) return ' {}\n';
-    
-    if (indent > 0) yamlStr += '\n';
-    
-    keys.forEach(key => {
-      const value = obj[key];
-      if (typeof value === 'object' && value !== null) {
-        yamlStr += `${spaces}${key}:${jsonToYaml(value, indent + 2)}`;
-      } else {
-        yamlStr += `${spaces}${key}: ${value}\n`;
-      }
-    });
-    
-    return yamlStr;
-  };
-
   if (!isOpen || !deployment) return null;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(yaml);
+    navigator.clipboard.writeText(describeText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleDownload = () => {
-    const element = document.createElement("a");
-    const file = new Blob([yaml], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
-    element.download = `${deployment.name}-deployment.yaml`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
   };
 
   // Simple highlight matches
   const renderHighlightedContent = () => {
     if (!searchTerm.trim()) {
-      return <pre className="whitespace-pre-wrap">{yaml}</pre>;
+      return <pre className="whitespace-pre">{describeText}</pre>;
     }
     const escapedTerm = searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
     const regex = new RegExp(`(${escapedTerm})`, 'gi');
-    const parts = yaml.split(regex);
+    const parts = describeText.split(regex);
     return (
-      <pre className="whitespace-pre-wrap">
+      <pre className="whitespace-pre">
         {parts.map((part, index) => 
           regex.test(part) ? (
             <mark key={index} className="bg-amber-400 text-gray-900 rounded px-0.5 font-bold">
@@ -122,7 +70,7 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Deployment Config (YAML)</h2>
+            <h2 className="text-lg font-bold text-gray-900">Deployment Describe Details</h2>
             <p className="text-xs text-gray-500 font-mono">{deployment.namespace}/{deployment.name}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -131,7 +79,7 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
               <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2" />
               <input
                 type="text"
-                placeholder="Search in YAML..."
+                placeholder="Search describe..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-8 pr-2.5 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:border-k8s-blue bg-white"
@@ -157,11 +105,11 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto bg-gray-900 p-6 font-mono text-xs text-gray-100 leading-relaxed min-h-0 select-text">
+        <div className="flex-1 overflow-auto bg-gray-950 p-6 font-mono text-xs text-gray-200 leading-relaxed min-h-0 select-text">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full space-y-2">
               <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
-              <span className="text-sm text-gray-400">Fetching manifest...</span>
+              <span className="text-sm text-gray-400">Loading describe output...</span>
             </div>
           ) : error ? (
             <div className="flex items-start gap-3 bg-red-900/30 border border-red-700/50 rounded p-4 text-red-300">
@@ -175,26 +123,15 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center bg-gray-50 rounded-b-lg">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={loading || error}
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Clipboard className="w-3.5 h-3.5 text-gray-500" />}
-              {copied ? 'Copied' : 'Copy YAML'}
-            </button>
-            <button
-              type="button"
-              disabled={loading || error}
-              onClick={handleDownload}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              <Download className="w-3.5 h-3.5 text-gray-500" />
-              Download YAML
-            </button>
-          </div>
+          <button
+            type="button"
+            disabled={loading || error}
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Clipboard className="w-3.5 h-3.5 text-gray-500" />}
+            {copied ? 'Copied' : 'Copy Output'}
+          </button>
           <button
             type="button"
             onClick={onClose}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { apiService } from '../services/api';
+import API from '../ApiCall/Api';
 import { useToast } from './ToastContext';
 
 const DashboardContext = createContext(null);
@@ -24,21 +24,27 @@ export const DashboardProvider = ({ children }) => {
 
   // Fetch clusters and current active context
   const loadClusterData = useCallback(async (initialLoad = false) => {
+    const token = localStorage.getItem('k8s_token');
+    if (!token) return;
+
     try {
-      const availableClusters = await apiService.getClusters();
+      const clustersRes = await API.get('/clusters');
+      const availableClusters = clustersRes.data?.data || [];
       setClusters(availableClusters);
 
-      const activeDetails = await apiService.getCurrentCluster();
-      setClusterDetails(activeDetails);
-      setCurrentCluster(activeDetails.name);
+      const currentRes = await API.get('/clusters/current');
+      const activeDetails = currentRes.data?.data;
+      if (activeDetails) {
+        setClusterDetails(activeDetails);
+        setCurrentCluster(activeDetails.name);
 
-      if (initialLoad) {
-        // If there was a last selected cluster stored, try to switch to it if different
-        const lastCluster = localStorage.getItem('k8s_last_cluster');
-        if (lastCluster && lastCluster !== activeDetails.name && availableClusters.some(c => c.name === lastCluster)) {
-          await performSwitch(lastCluster, true);
-        } else {
-          localStorage.setItem('k8s_last_cluster', activeDetails.name);
+        if (initialLoad) {
+          const lastCluster = localStorage.getItem('k8s_last_cluster');
+          if (lastCluster && lastCluster !== activeDetails.name && availableClusters?.some(c => c.name === lastCluster)) {
+            await performSwitch(lastCluster, true);
+          } else {
+            localStorage.setItem('k8s_last_cluster', activeDetails.name);
+          }
         }
       }
     } catch (err) {
@@ -49,11 +55,12 @@ export const DashboardProvider = ({ children }) => {
   const performSwitch = async (contextName, silent = false) => {
     setIsSwitchingCluster(true);
     try {
-      await apiService.switchCluster(contextName);
+      await API.post('/clusters/switch', { context: contextName });
       localStorage.setItem('k8s_last_cluster', contextName);
       setCurrentCluster(contextName);
       
-      const activeDetails = await apiService.getCurrentCluster();
+      const currentRes = await API.get('/clusters/current');
+      const activeDetails = currentRes.data?.data;
       setClusterDetails(activeDetails);
 
       if (!silent) {

@@ -4,7 +4,7 @@ import {
   Eye, FileText, Microscope, RotateCcw, Trash2,
   AlertTriangle, Loader2, Filter, Plus
 } from 'lucide-react';
-import { podApi } from '../services/podApi';
+import { API_BASE_URL, default as API } from '../ApiCall/Api';
 import { useToast } from '../context/ToastContext';
 import { useDashboard } from '../context/DashboardContext';
 import { PodDetailsModal }  from '../components/pods/PodDetailsModal';
@@ -48,36 +48,35 @@ const getStatusDot   = (status) => STATUS_DOT[status]   || STATUS_DOT.Unknown;
 
 /** True when the pod is owned by a ReplicaSet (→ Deployment) or StatefulSet */
 const isRestartable = (pod) =>
-  pod.ownerKind === 'ReplicaSet' || pod.ownerKind === 'StatefulSet';
+  !!pod.ownerKind && ['ReplicaSet', 'Deployment', 'StatefulSet', 'DaemonSet'].includes(pod.ownerKind);
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 export const PodsPage = () => {
-  const { addToast } = useToast();
-  const { refreshTrigger } = useDashboard();
+  const { addToast }                                          = useToast();
+  const { searchQuery, namespace: contextNS, refreshTrigger } = useDashboard();
 
-  // ── Data ────────────────────────────────────────────────────────────────────
+  // ── Local state ─────────────────────────────────────────────────────────────
   const [pods,           setPods]           = useState([]);
-  const [namespaces,     setNamespaces]     = useState(['All Namespaces', 'default', 'kube-system', 'kube-public', 'kube-node-lease']);
-
-  // ── UI State ─────────────────────────────────────────────────────────────────
+  const [namespaces,     setNamespaces]     = useState(['All Namespaces', 'default', 'production', 'staging', 'kube-system']);
+  const [selectedNS,     setSelectedNS]     = useState('All Namespaces');
   const [loading,        setLoading]        = useState(true);
   const [isRefreshing,   setIsRefreshing]   = useState(false);
   const [error,          setError]          = useState(null);
-
-  // ── Filters (local to this page, do NOT touch global context) ────────────────
-  const [selectedNS,     setSelectedNS]     = useState('default');
-  const [searchQuery,    setSearchQuery]    = useState('');
-
-  // ── Pagination ───────────────────────────────────────────────────────────────
   const [currentPage,    setCurrentPage]    = useState(1);
 
-  const [detailsPod,     setDetailsPod]     = useState(null); // PodDetailsModal
-  const [logsPod,        setLogsPod]        = useState(null); // PodLogsModal
-  const [describePod,    setDescribePod]    = useState(null); // PodDescribeModal
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false); // CreatePodModal
+  // Sync with global topbar namespace selector
+  useEffect(() => {
+    setSelectedNS(contextNS);
+  }, [contextNS]);
+
+  // ── Modal states ─────────────────────────────────────────────────────────────
+  const [detailsPod,         setDetailsPod]         = useState(null);
+  const [logsPod,            setLogsPod]            = useState(null);
+  const [describePod,        setDescribePod]        = useState(null);
+  const [isCreateModalOpen,  setIsCreateModalOpen]  = useState(false); // CreatePodModal
 
   // ── Confirm dialogs ──────────────────────────────────────────────────────────
   const [deleteTarget,   setDeleteTarget]   = useState(null); // pod to delete
@@ -93,7 +92,8 @@ export const PodsPage = () => {
 
   const fetchNamespaces = useCallback(async () => {
     try {
-      const ns = await podApi.getNamespaces();
+      const res = await API.get('/pod-mgmt/namespaces');
+      const ns = res.data?.data || ['All Namespaces'];
       setNamespaces(ns);
     } catch (_err) {
       // Use the defaults already set in state
@@ -104,7 +104,9 @@ export const PodsPage = () => {
     if (showSkeleton) setLoading(true);
     setError(null);
     try {
-      const data = await podApi.getPods(selectedNS);
+      const nsParam = selectedNS === 'All Namespaces' ? '' : selectedNS;
+      const res = await API.get('/pod-mgmt/pods', { params: nsParam ? { namespace: nsParam } : {} });
+      const data = res.data?.data || [];
       setPods(data);
       setCurrentPage(1);
     } catch (err) {
@@ -171,7 +173,7 @@ export const PodsPage = () => {
     setDeletingPod(pod.name);
     setDeleteTarget(null);
     try {
-      await podApi.deletePod(pod.namespace, pod.name);
+      await API.delete(`/pod-mgmt/${pod.namespace}/${pod.name}`);
       addToast(`Pod "${pod.name}" deleted successfully.`, 'success');
       fetchPods(false);
     } catch (err) {
@@ -187,7 +189,7 @@ export const PodsPage = () => {
     setRestartingPod(pod.name);
     setRestartTarget(null);
     try {
-      await podApi.restartPod(pod.namespace, pod.name);
+      await API.post(`/pod-mgmt/${pod.namespace}/${pod.name}/restart`);
       addToast(`Pod "${pod.name}" restart triggered. Controller will recreate it.`, 'success');
       // Wait a moment then refresh
       setTimeout(() => fetchPods(false), 1500);

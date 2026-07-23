@@ -81,5 +81,25 @@ export const deploymentApi = {
   deleteDeployment: async (namespace, name) => {
     const res = await deployAxios.delete(`/deployment-mgmt/${namespace}/${name}`);
     return res.data;
+  },
+
+  getDeploymentEvents: async (namespace, name) => {
+    const res = await deployAxios.get(`/deployments/${name}/events`, { params: { namespace } });
+    return res.data.data || [];
+  },
+
+  describeDeployment: async (namespace, name) => {
+    const res = await deployAxios.get(`/deployments/${name}/describe`, { params: { namespace } });
+    return res.data.data;
+  },
+
+  getDeploymentPods: async (namespace, name) => {
+    const res = await deployAxios.get(`/deployments/${name}/pods`, { params: { namespace } });
+    return res.data.data || [];
+  },
+
+  getDeploymentReplicaSets: async (namespace, name) => {
+    const res = await deployAxios.get(`/deployments/${name}/replicasets`, { params: { namespace } });
+    return res.data.data || [];
   }
 };

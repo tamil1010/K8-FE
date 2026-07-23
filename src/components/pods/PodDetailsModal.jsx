@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, Loader2, AlertTriangle } from 'lucide-react';
-import { podApi } from '../../services/podApi';
+import API from '../../ApiCall/Api';
 
 /**
  * PodDetailsModal
@@ -17,8 +17,8 @@ export const PodDetailsModal = ({ pod, onClose }) => {
     if (!pod) return;
     setLoading(true);
     setError(null);
-    podApi.getPodDetails(pod.namespace, pod.name)
-      .then(setDetails)
+    API.get(`/pod-mgmt/${pod.namespace}/${pod.name}/details`)
+      .then((res) => setDetails(res.data?.data))
       .catch(() => setError('Failed to load pod details.'))
       .finally(() => setLoading(false));
   }, [pod]);

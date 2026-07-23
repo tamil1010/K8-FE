@@ -33,7 +33,7 @@ nodeAxios.interceptors.response.use(
 
 export const nodeApi = {
   getNodes: async () => {
-    const res = await nodeAxios.get('/node-mgmt/nodes');
+    const res = await nodeAxios.get('/nodes');
     return res.data.data || [];
   },
 
@@ -43,7 +43,7 @@ export const nodeApi = {
   },
 
   getNodePods: async (name) => {
-    const res = await nodeAxios.get(`/node-mgmt/nodes/${name}/pods`);
+    const res = await nodeAxios.get(`/nodes/${name}/pods`);
     return res.data.data || [];
   },
 
@@ -64,6 +64,26 @@ export const nodeApi = {
 
   getNodeMetrics: async (name) => {
     const res = await nodeAxios.get(`/nodes/${name}/metrics`);
+    return res.data.data;
+  },
+
+  cordonNode: async (name) => {
+    const res = await nodeAxios.put(`/nodes/${name}/cordon`);
+    return res.data.data;
+  },
+
+  uncordonNode: async (name) => {
+    const res = await nodeAxios.put(`/nodes/${name}/uncordon`);
+    return res.data.data;
+  },
+
+  drainNode: async (name) => {
+    const res = await nodeAxios.post(`/nodes/${name}/drain`);
+    return res.data.data;
+  },
+
+  deleteNode: async (name) => {
+    const res = await nodeAxios.delete(`/nodes/${name}`);
     return res.data.data;
   }
 };

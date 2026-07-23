@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, RefreshCw, Copy, Check, ArrowDownToLine, Loader2, AlertTriangle } from 'lucide-react';
-import { podApi } from '../../services/podApi';
+import API from '../../ApiCall/Api';
 
 /**
  * PodLogsModal — kubectl logs equivalent
@@ -24,8 +24,9 @@ export const PodLogsModal = ({ pod, onClose }) => {
     setLoading(true);
     setError(null);
     try {
-      const text = await podApi.getPodLogs(pod.namespace, pod.name, '', tail);
-      setLogs(text || '(no logs)');
+      const res = await API.get(`/pod-mgmt/${pod.namespace}/${pod.name}/logs`, { params: { tail } });
+      const text = res.data?.data?.logs || '(no logs)';
+      setLogs(text);
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Failed to fetch logs.';
       setError(msg);

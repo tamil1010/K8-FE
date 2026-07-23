@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../services/api';
+import API from '../ApiCall/Api';
 import { useDashboard } from '../context/DashboardContext';
 import { useToast } from '../context/ToastContext';
 import { CardSkeleton, ChartSkeleton, TableSkeleton } from '../components/SkeletonLoader';
@@ -44,25 +44,28 @@ export const OverviewPage = () => {
     setError(null);
     try {
       const [statsRes, cpuRes, memRes, eventsRes] = await Promise.all([
-        apiService.getOverview(),
-        apiService.getCPUUsage(),
-        apiService.getMemoryUsage(),
-        apiService.getEvents()
+        API.get('/dashboard/overview'),
+        API.get('/metrics/cpu'),
+        API.get('/metrics/memory'),
+        API.get('/events')
       ]);
-      setStats(statsRes);
+      setStats(statsRes.data?.data || null);
       
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const cpuVal = cpuRes.data?.data?.value || 0;
+      const memVal = memRes.data?.data?.value || 0;
       
       setCpuHistory(prev => {
-        const next = [...prev, { time: timeStr, value: cpuRes.value }];
+        const next = [...prev, { time: timeStr, value: cpuVal }];
         return next.slice(-15);
       });
       setMemoryHistory(prev => {
-        const next = [...prev, { time: timeStr, value: memRes.value }];
+        const next = [...prev, { time: timeStr, value: memVal }];
         return next.slice(-15);
       });
       
-      setEvents(eventsRes.slice(0, 8)); // Top 8 events
+      const evList = eventsRes.data?.data || [];
+      setEvents(evList.slice(0, 8)); // Top 8 events
     } catch (err) {
       setError('Failed to fetch dashboard metrics. Please check connection.');
     } finally {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
-import { podApi } from '../../services/podApi';
+import API from '../../ApiCall/Api';
 
 /**
  * PodDescribeModal — kubectl describe pod equivalent
@@ -17,8 +17,8 @@ export const PodDescribeModal = ({ pod, onClose }) => {
     if (!pod) return;
     setLoading(true);
     setError(null);
-    podApi.describePod(pod.namespace, pod.name)
-      .then(setData)
+    API.get(`/pod-mgmt/${pod.namespace}/${pod.name}/describe`)
+      .then((res) => setData(res.data?.data))
       .catch(() => setError('Failed to load pod description.'))
       .finally(() => setLoading(false));
   }, [pod]);

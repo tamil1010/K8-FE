@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Loader2, AlertTriangle, Plus, FileCode, Edit3 } from 'lucide-react';
-import { deploymentApi } from '../../services/deploymentApi';
+import API from '../../ApiCall/Api';
 import { useToast } from '../../context/ToastContext';
 
 export const CreateDeploymentModal = ({ isOpen, onClose, namespaces, onSuccess }) => {
@@ -79,7 +79,7 @@ export const CreateDeploymentModal = ({ isOpen, onClose, namespaces, onSuccess }
     }
 
     try {
-      await deploymentApi.createDeployment(namespace, payloadManifest);
+      await API.post('/deployment-mgmt/deployments', { namespace, body: payloadManifest });
       addToast(`Deployment created successfully!`, 'success');
       onSuccess();
     } catch (err) {

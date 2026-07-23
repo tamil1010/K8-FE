@@ -1,34 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
-import API from '../../ApiCall/Api';
+import { deploymentApi } from '../../services/deploymentApi';
 
-export const NodeEventsModal = ({ isOpen, onClose, node }) => {
+export const DeploymentEventsModal = ({ isOpen, onClose, deployment }) => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    if (isOpen && node) {
+    if (isOpen && deployment) {
       fetchEvents();
     }
-  }, [isOpen, node]);
+  }, [isOpen, deployment]);
 
   const fetchEvents = async (showSkeleton = true) => {
     if (showSkeleton) setLoading(true);
     setError(null);
     try {
-      const res = await API.get(`/nodes/${node.name}/events`);
-      setEvents(res.data?.data || []);
+      const data = await deploymentApi.getDeploymentEvents(deployment.namespace, deployment.name);
+      setEvents(data);
     } catch (err) {
-      setError('Failed to fetch events for this node.');
+      setError('Failed to fetch events for this deployment.');
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
   };
 
-  if (!isOpen || !node) return null;
+  if (!isOpen || !deployment) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -38,8 +38,8 @@ export const NodeEventsModal = ({ isOpen, onClose, node }) => {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Node Events</h2>
-            <p className="text-xs text-gray-500 font-mono">{node.name}</p>
+            <h2 className="text-lg font-bold text-gray-900">Deployment Events</h2>
+            <p className="text-xs text-gray-500 font-mono">{deployment.namespace}/{deployment.name}</p>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -76,7 +76,7 @@ export const NodeEventsModal = ({ isOpen, onClose, node }) => {
             </div>
           ) : events.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 italic">
-              No recent events found for this node.
+              No recent events found for this deployment.
             </div>
           ) : (
             <div className="border border-gray-200 rounded overflow-hidden">

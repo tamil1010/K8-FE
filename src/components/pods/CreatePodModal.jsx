@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Loader2, AlertTriangle, Plus, Trash2 } from 'lucide-react';
-import { podApi } from '../../services/podApi';
+import API from '../../ApiCall/Api';
 import { useToast } from '../../context/ToastContext';
 
 export const CreatePodModal = ({ isOpen, onClose, namespaces, onSuccess }) => {
@@ -68,13 +68,13 @@ export const CreatePodModal = ({ isOpen, onClose, namespaces, onSuccess }) => {
     };
 
     try {
-      await podApi.createPod(payload);
+      await API.post('/pod-mgmt/pods', payload);
       addToast(`Pod "${payload.name}" created successfully!`, 'success');
       onSuccess();
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Failed to create pod.';
       setError(msg);
-      setLoading(false); // only stop loading on error, on success unmounts
+      setLoading(false); 
     }
   };
 
