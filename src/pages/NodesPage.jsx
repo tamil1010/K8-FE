@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   RefreshCw, Search, ChevronLeft, ChevronRight,
   Eye, Shield, Activity, Filter, ArrowUpDown, Info, Layers, AlertTriangle,
-  MoreVertical, FileCode, FileText, Clipboard
+  MoreVertical, FileCode, FileText, Clipboard, Download, Ban, Play, Trash2
 } from 'lucide-react';
 import API from '../ApiCall/Api';
 import { useToast } from '../context/ToastContext';
@@ -62,8 +63,91 @@ export const NodesPage = () => {
   const [yamlTarget, setYamlTarget] = useState(null);
   const [describeTarget, setDescribeTarget] = useState(null);
   const [eventsTarget, setEventsTarget] = useState(null);
-  const [activeDropdown, setActiveDropdown] = useState(null);
+  const [activeDropdownNode, setActiveDropdownNode] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, alignUp: false });
   const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // Close dropdown on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setActiveDropdownNode(null);
+      }
+    };
+    if (activeDropdownNode) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeDropdownNode]);
+
+  // Cordon, Uncordon, Drain, Delete handlers
+  const handleCordon = async (name) => {
+    setActiveDropdownNode(null);
+    try {
+      await nodeApi.cordonNode(name);
+      addToast(`Node ${name} cordoned successfully.`, 'success');
+      fetchNodes(false);
+    } catch (err) {
+      addToast(err.response?.data?.message || err.message || `Failed to cordon node ${name}.`, 'error');
+    }
+  };
+
+  const handleUncordon = async (name) => {
+    setActiveDropdownNode(null);
+    try {
+      await nodeApi.uncordonNode(name);
+      addToast(`Node ${name} uncordoned successfully.`, 'success');
+      fetchNodes(false);
+    } catch (err) {
+      addToast(err.response?.data?.message || err.message || `Failed to uncordon node ${name}.`, 'error');
+    }
+  };
+
+  const handleDrain = async (name) => {
+    setActiveDropdownNode(null);
+    if (!window.confirm(`Are you sure you want to drain node ${name}? This will evict/delete running workloads.`)) return;
+    try {
+      await nodeApi.drainNode(name);
+      addToast(`Node ${name} drained successfully.`, 'success');
+      fetchNodes(false);
+    } catch (err) {
+      addToast(err.response?.data?.message || err.message || `Failed to drain node ${name}.`, 'error');
+    }
+  };
+
+  const handleDeleteNode = async (name) => {
+    setActiveDropdownNode(null);
+    if (!window.confirm(`Are you sure you want to delete node ${name} from cluster?`)) return;
+    try {
+      await nodeApi.deleteNode(name);
+      addToast(`Node ${name} deleted successfully.`, 'success');
+      fetchNodes(true);
+    } catch (err) {
+      addToast(err.response?.data?.message || err.message || `Failed to delete node ${name}.`, 'error');
+    }
+  };
+
+  const handleDownloadYaml = async (name) => {
+    setActiveDropdownNode(null);
+    try {
+      const data = await nodeApi.getNodeYaml(name);
+      const jsonStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${name}-spec.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      addToast(`Downloaded specification for node ${name}.`, 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to download YAML specification.', 'error');
+    }
+  };
 
   // Fetch Nodes
   const fetchNodes = useCallback(async (showSkeleton = true) => {
@@ -77,11 +161,12 @@ export const NodesPage = () => {
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Failed to fetch Kubernetes nodes.';
       setError(msg);
+      addToast(msg, 'error');
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [addToast]);
 
   useEffect(() => {
     fetchNodes(true);
@@ -237,8 +322,10 @@ export const NodesPage = () => {
 
       {/* ── Summary Stats Grid (Node Health Card) ─────────────────────────────── */}
       {!loading && !error && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCard label="Total Nodes" value={summary.total} subtitle={`${summary.ready} Ready / ${summary.notReady} NotReady`} />
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <StatCard label="Total Nodes" value={summary.total} subtitle="Cluster total" />
+          <StatCard label="Ready Nodes" value={summary.ready} subtitle="Active & healthy" color="green" />
+          <StatCard label="Not Ready Nodes" value={summary.notReady} subtitle="Requires attention" color="red" />
           <StatCard label="Control Plane Nodes" value={summary.controlPlane} subtitle="Cluster Orchestrators" color="blue" />
           <StatCard label="Worker Nodes" value={summary.worker} subtitle="Workload Hosts" color="green" />
           <StatCard label="Average CPU Usage" value={summary.avgCpu !== 'N/A' ? `${summary.avgCpu}%` : 'N/A'} subtitle="Overall CPU load" color="emerald" />
@@ -428,28 +515,36 @@ export const NodesPage = () => {
 
                     {/* CPU Usage progress bar */}
                     <td className="px-4 py-3.5 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 bg-gray-100 border border-gray-200 rounded-full h-2 overflow-hidden">
-                          <div 
-                            className={`h-full transition-all duration-500 ${getProgressBarColor(node.cpuUsagePct)}`}
-                            style={{ width: `${node.cpuUsagePct === 'N/A' ? 0 : node.cpuUsagePct}%` }}
-                          />
+                      {node.cpuUsagePct !== undefined && node.cpuUsagePct !== null && node.cpuUsagePct !== 'N/A' ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 bg-gray-100 border border-gray-200 rounded-full h-2 overflow-hidden">
+                            <div 
+                              className={`h-full transition-all duration-500 ${getProgressBarColor(node.cpuUsagePct)}`}
+                              style={{ width: `${node.cpuUsagePct}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono font-bold text-gray-600">{node.cpuUsagePct}%</span>
                         </div>
-                        <span className="text-xs font-mono font-bold text-gray-600">{node.cpuUsagePct === 'N/A' ? 'N/A' : `${node.cpuUsagePct}%`}</span>
-                      </div>
+                      ) : (
+                        <span className="text-xs font-mono text-gray-400 font-semibold">N/A</span>
+                      )}
                     </td>
 
                     {/* Memory Usage progress bar */}
                     <td className="px-4 py-3.5 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 bg-gray-100 border border-gray-200 rounded-full h-2 overflow-hidden">
-                          <div 
-                            className={`h-full transition-all duration-500 ${getProgressBarColor(node.memUsagePct)}`}
-                            style={{ width: `${node.memUsagePct === 'N/A' ? 0 : node.memUsagePct}%` }}
-                          />
+                      {node.memUsagePct !== undefined && node.memUsagePct !== null && node.memUsagePct !== 'N/A' ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 bg-gray-100 border border-gray-200 rounded-full h-2 overflow-hidden">
+                            <div 
+                              className={`h-full transition-all duration-500 ${getProgressBarColor(node.memUsagePct)}`}
+                              style={{ width: `${node.memUsagePct}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono font-bold text-gray-600">{node.memUsagePct}%</span>
                         </div>
-                        <span className="text-xs font-mono font-bold text-gray-600">{node.memUsagePct === 'N/A' ? 'N/A' : `${node.memUsagePct}%`}</span>
-                      </div>
+                      ) : (
+                        <span className="text-xs font-mono text-gray-400 font-semibold">N/A</span>
+                      )}
                     </td>
 
                     {/* Pod count */}
@@ -470,73 +565,31 @@ export const NodesPage = () => {
                     {/* Actions */}
                     <td className="px-4 py-3.5 whitespace-nowrap text-right relative" onClick={e => e.stopPropagation()}>
                       <button
-                        onClick={() => setActiveDropdown(activeDropdown === node.name ? null : node.name)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (activeDropdownNode?.name === node.name) {
+                            setActiveDropdownNode(null);
+                          } else {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const viewportHeight = window.innerHeight;
+                            const menuHeight = 280; // approximate menu height
+                            const menuWidth = 176; // w-44 is 176px
+                            const spaceBelow = viewportHeight - rect.bottom;
+                            const alignUp = spaceBelow < menuHeight && rect.top > menuHeight;
+                            
+                            const top = alignUp 
+                              ? window.scrollY + rect.top - menuHeight
+                              : window.scrollY + rect.bottom;
+                            const left = window.scrollX + rect.right - menuWidth;
+                            
+                            setActiveDropdownNode(node);
+                            setMenuPosition({ top, left, alignUp });
+                          }
+                        }}
                         className="inline-flex items-center justify-center w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-700 transition-colors focus:outline-none"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
-                      
-                      {activeDropdown === node.name && (
-                        <>
-                          <div 
-                            className="fixed inset-0 z-10" 
-                            onClick={() => setActiveDropdown(null)}
-                          />
-                          <div className="absolute right-4 mt-1 w-40 bg-white border border-gray-200 rounded shadow-lg py-1 z-20 text-gray-800 text-left font-sans select-none">
-                            <button
-                              onClick={() => {
-                                setDetailsTarget(node);
-                                setActiveDropdown(null);
-                              }}
-                              className="w-full text-left px-3.5 py-2 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors text-gray-700 font-semibold"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-blue-500" />
-                              View Details
-                            </button>
-                            <button
-                              onClick={() => {
-                                setYamlTarget(node);
-                                setActiveDropdown(null);
-                              }}
-                              className="w-full text-left px-3.5 py-2 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors text-gray-700 font-semibold"
-                            >
-                              <FileCode className="w-3.5 h-3.5 text-amber-500" />
-                              View YAML
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEventsTarget(node);
-                                setActiveDropdown(null);
-                              }}
-                              className="w-full text-left px-3.5 py-2 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors text-gray-700 font-semibold"
-                            >
-                              <Activity className="w-3.5 h-3.5 text-emerald-500" />
-                              View Events
-                            </button>
-                            <button
-                              onClick={() => {
-                                setDescribeTarget(node);
-                                setActiveDropdown(null);
-                              }}
-                              className="w-full text-left px-3.5 py-2 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors text-gray-700 font-semibold"
-                            >
-                              <FileText className="w-3.5 h-3.5 text-indigo-500" />
-                              Describe Node
-                            </button>
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(node.name);
-                                addToast('Node name copied to clipboard', 'success');
-                                setActiveDropdown(null);
-                              }}
-                              className="w-full text-left px-3.5 py-2 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors border-t border-gray-100 text-gray-600 font-semibold"
-                            >
-                              <Clipboard className="w-3.5 h-3.5 text-gray-400" />
-                              Copy Node Name
-                            </button>
-                          </div>
-                        </>
-                      )}
                     </td>
 
                   </tr>
@@ -595,6 +648,100 @@ export const NodesPage = () => {
           onClose={() => setEventsTarget(null)}
           node={eventsTarget}
         />
+      )}
+
+      {activeDropdownNode && (
+        <>
+          {/* Backdrop layer to close on click outside */}
+          <div 
+            className="fixed inset-0 z-45 bg-transparent" 
+            onClick={() => setActiveDropdownNode(null)}
+          />
+          {createPortal(
+            <div 
+              style={{ 
+                position: 'absolute',
+                top: `${menuPosition.top}px`, 
+                left: `${menuPosition.left}px`,
+                transformOrigin: menuPosition.alignUp ? 'bottom right' : 'top right'
+              }}
+              className="w-44 bg-white border border-gray-200 rounded shadow-xl py-1.5 z-50 text-gray-800 text-left font-sans select-none animate-in fade-in slide-in-from-top-1 duration-100"
+            >
+              <button
+                onClick={() => {
+                  setDetailsTarget(activeDropdownNode);
+                  setActiveDropdownNode(null);
+                }}
+                className="w-full text-left px-3.5 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors text-gray-700 font-semibold cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5 text-blue-500" />
+                View Details
+              </button>
+              <button
+                onClick={() => {
+                  setDescribeTarget(activeDropdownNode);
+                  setActiveDropdownNode(null);
+                }}
+                className="w-full text-left px-3.5 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors text-gray-700 font-semibold cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                Describe Node
+              </button>
+              <button
+                onClick={() => {
+                  setEventsTarget(activeDropdownNode);
+                  setActiveDropdownNode(null);
+                }}
+                className="w-full text-left px-3.5 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors text-gray-700 font-semibold cursor-pointer"
+              >
+                <Activity className="w-3.5 h-3.5 text-emerald-500" />
+                View Events
+              </button>
+              <button
+                onClick={() => handleDownloadYaml(activeDropdownNode.name)}
+                className="w-full text-left px-3.5 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors text-gray-700 font-semibold cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-amber-500" />
+                Download YAML
+              </button>
+              
+              <div className="border-t border-gray-100 my-1" />
+              
+              <button
+                onClick={() => handleCordon(activeDropdownNode.name)}
+                className="w-full text-left px-3.5 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors text-gray-700 font-semibold cursor-pointer"
+              >
+                <Ban className="w-3.5 h-3.5 text-orange-500" />
+                Cordon Node
+              </button>
+              <button
+                onClick={() => handleUncordon(activeDropdownNode.name)}
+                className="w-full text-left px-3.5 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors text-gray-700 font-semibold cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5 text-green-500" />
+                Uncordon Node
+              </button>
+              <button
+                onClick={() => handleDrain(activeDropdownNode.name)}
+                className="w-full text-left px-3.5 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 transition-colors text-gray-700 font-semibold cursor-pointer"
+              >
+                <Activity className="w-3.5 h-3.5 text-red-500" />
+                Drain Node
+              </button>
+              
+              <div className="border-t border-gray-100 my-1" />
+              
+              <button
+                onClick={() => handleDeleteNode(activeDropdownNode.name)}
+                className="w-full text-left px-3.5 py-1.5 text-xs hover:bg-red-50 hover:text-red-700 flex items-center gap-2 transition-colors text-gray-600 font-semibold cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                Delete Node
+              </button>
+            </div>,
+            document.body
+          )}
+        </>
       )}
 
     </div>

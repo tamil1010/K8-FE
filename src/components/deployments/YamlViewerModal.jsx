@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
+<<<<<<< Updated upstream
 import { X, Loader2, AlertTriangle, Clipboard, Download, Check } from 'lucide-react';
 import API from '../../ApiCall/Api';
+=======
+import { X, Loader2, AlertTriangle, Clipboard, Download, Check, Maximize2, Minimize2, Search } from 'lucide-react';
+import { deploymentApi } from '../../services/deploymentApi';
+>>>>>>> Stashed changes
 
 export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
   const [yaml, setYaml] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (isOpen && deployment) {
@@ -18,6 +25,7 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
     setLoading(true);
     setError(null);
     try {
+<<<<<<< Updated upstream
       const res = await API.get(`/deployment-mgmt/${deployment.namespace}/${deployment.name}/yaml`);
       const data = res.data?.data;
       // Format YAML (convert JSON response to standard YAML format)
@@ -26,6 +34,9 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
       // Wait, let's write a simple JSON stringifier formatting or we can convert it to YAML using a basic client-side helper.
       // Let's import a lightweight YAML converter or stringify JSON representation nicely. A YAML viewer showing YAML is requested.
       // Let's write a lightweight JSON-to-YAML stringifier in JS to show authentic YAML! It's simple to do for standard K8s objects.
+=======
+      const data = await deploymentApi.getDeploymentYaml(deployment.namespace, deployment.name);
+>>>>>>> Stashed changes
       const yamlStr = jsonToYaml(data);
       setYaml(yamlStr);
     } catch (err) {
@@ -61,7 +72,6 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
     const keys = Object.keys(obj);
     if (keys.length === 0) return ' {}\n';
     
-    // Add newline if nested
     if (indent > 0) yamlStr += '\n';
     
     keys.forEach(key => {
@@ -94,23 +104,71 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
     document.body.removeChild(element);
   };
 
+  // Simple highlight matches
+  const renderHighlightedContent = () => {
+    if (!searchTerm.trim()) {
+      return <pre className="whitespace-pre-wrap">{yaml}</pre>;
+    }
+    const escapedTerm = searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`(${escapedTerm})`, 'gi');
+    const parts = yaml.split(regex);
+    return (
+      <pre className="whitespace-pre-wrap">
+        {parts.map((part, index) => 
+          regex.test(part) ? (
+            <mark key={index} className="bg-amber-400 text-gray-900 rounded px-0.5 font-bold">
+              {part}
+            </mark>
+          ) : (
+            part
+          )
+        )}
+      </pre>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={onClose} />
       
-      <div className="relative z-10 bg-white rounded-lg shadow-2xl w-full max-w-3xl flex flex-col animate-[fadeIn_0.15s_ease-out] h-[80vh]">
+      <div className={`relative z-10 bg-white rounded-lg shadow-2xl flex flex-col transition-all duration-300 ${
+        isFullscreen ? 'w-full h-full p-2' : 'w-full max-w-4xl h-[80vh]'
+      }`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Deployment Spec (YAML)</h2>
+            <h2 className="text-lg font-bold text-gray-900">Deployment Config (YAML)</h2>
             <p className="text-xs text-gray-500 font-mono">{deployment.namespace}/{deployment.name}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Search Input */}
+            <div className="relative w-48 select-none">
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2" />
+              <input
+                type="text"
+                placeholder="Search in YAML..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-2.5 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:border-k8s-blue bg-white"
+              />
+            </div>
+
+            {/* Fullscreen Button */}
+            <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="p-1.5 rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
+              title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -126,7 +184,7 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
               <p>{error}</p>
             </div>
           ) : (
-            <pre className="whitespace-pre-wrap">{yaml}</pre>
+            renderHighlightedContent()
           )}
         </div>
 
@@ -140,7 +198,7 @@ export const YamlViewerModal = ({ isOpen, onClose, deployment }) => {
               className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Clipboard className="w-3.5 h-3.5 text-gray-500" />}
-              {copied ? 'Copied' : 'Copy Spec'}
+              {copied ? 'Copied' : 'Copy YAML'}
             </button>
             <button
               type="button"

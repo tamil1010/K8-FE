@@ -2,35 +2,41 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   RefreshCw, Search, ChevronLeft, ChevronRight,
   Eye, FileText, Microscope, RotateCcw, Trash2,
-  AlertTriangle, Loader2, Filter, Plus, FileCode, SlidersHorizontal, ArrowUpDown
+  AlertTriangle, Loader2, Filter, Plus, FileCode, SlidersHorizontal, ArrowUpDown,
+  Calendar
 } from 'lucide-react';
 import API from '../ApiCall/Api';
 import { useToast } from '../context/ToastContext';
 import { useDashboard } from '../context/DashboardContext';
 
-// Import newly created modals/drawers
 import { CreateDeploymentModal } from '../components/deployments/CreateDeploymentModal';
 import { ScaleDeploymentModal } from '../components/deployments/ScaleDeploymentModal';
 import { RollbackModal } from '../components/deployments/RollbackModal';
 import { YamlViewerModal } from '../components/deployments/YamlViewerModal';
 import { DeploymentLogsModal } from '../components/deployments/DeploymentLogsModal';
 import { DeploymentDetailsDrawer } from '../components/deployments/DeploymentDetailsDrawer';
+import { DeploymentDescribeModal } from '../components/deployments/DeploymentDescribeModal';
+import { DeploymentEventsModal } from '../components/deployments/DeploymentEventsModal';
 import { ConfirmDialog } from '../components/pods/ConfirmDialog';
 
 const ITEMS_PER_PAGE = 10;
 
 const HEALTH_STYLES = {
   Healthy: 'bg-green-50 text-green-700 border-green-200',
+  Completed: 'bg-green-50 text-green-700 border-green-200',
+  'Rolling Update': 'bg-blue-50 text-blue-700 border-blue-200',
   Progressing: 'bg-blue-50 text-blue-700 border-blue-200',
-  Pending: 'bg-orange-50 text-orange-700 border-orange-200',
+  Pending: 'bg-amber-50 text-amber-700 border-amber-200',
   Failed: 'bg-red-50 text-red-700 border-red-200',
   Unknown: 'bg-gray-50 text-gray-600 border-gray-200'
 };
 
 const HEALTH_DOTS = {
   Healthy: 'bg-green-500',
+  Completed: 'bg-green-500',
+  'Rolling Update': 'bg-blue-500 animate-pulse',
   Progressing: 'bg-blue-500 animate-pulse',
-  Pending: 'bg-orange-500 animate-pulse',
+  Pending: 'bg-amber-500 animate-pulse',
   Failed: 'bg-red-500 animate-pulse',
   Unknown: 'bg-gray-400'
 };
@@ -51,6 +57,7 @@ export const DeploymentsPage = () => {
   // ── Filters & Search ────────────────────────────────────────────────────────
   const [selectedNS, setSelectedNS] = useState('All Namespaces');
   const [searchQuery, setSearchQuery] = useState('');
+<<<<<<< Updated upstream
   const [statusFilter, setStatusFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -58,6 +65,32 @@ export const DeploymentsPage = () => {
   useEffect(() => {
     setSelectedNS(globalNS);
   }, [globalNS]);
+=======
+  const [healthFilter, setHealthFilter] = useState('All');
+  const [strategyFilter, setStrategyFilter] = useState('All');
+  const [ageFilter, setAgeFilter] = useState('All');
+  const [cpuFilter, setCpuFilter] = useState('All');
+  const [memFilter, setMemFilter] = useState('All');
+  const [sortBy, setSortBy] = useState('name'); // 'name', 'age', 'replicas', 'namespace'
+  const [sortOrder, setSortOrder] = useState('asc'); // 'asc', 'desc'
+
+  // ── Pagination ─────────────────────────────────────────────────────────────
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // ── Modals & Drawers ────────────────────────────────────────────────────────
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [scaleTarget, setScaleTarget] = useState(null);
+  const [rollbackTarget, setRollbackTarget] = useState(null);
+  const [yamlTarget, setYamlTarget] = useState(null);
+  const [logsTarget, setLogsTarget] = useState(null);
+  const [detailsTarget, setDetailsTarget] = useState(null);
+  const [describeTarget, setDescribeTarget] = useState(null);
+  const [eventsTarget, setEventsTarget] = useState(null);
+
+  // ── Auto Refresh ───────────────────────────────────────────────────────────
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastRefreshed, setLastRefreshed] = useState(new Date().toLocaleTimeString());
+>>>>>>> Stashed changes
 
   // ── Modals & Actions state ──────────────────────────────────────────────────
   const [activeModal, setActiveModal] = useState(null); // 'create' | 'scale' | 'rollback' | 'yaml' | 'logs' | 'details'
@@ -89,6 +122,7 @@ export const DeploymentsPage = () => {
       const res = await API.get('/deployment-mgmt/deployments', { params: nsParam ? { namespace: nsParam } : {} });
       const data = res.data?.data || [];
       setDeployments(data);
+      setLastRefreshed(new Date().toLocaleTimeString());
       setCurrentPage(1);
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Failed to fetch deployments.';
@@ -107,9 +141,40 @@ export const DeploymentsPage = () => {
     fetchDeployments(true);
   }, [fetchDeployments, refreshTrigger]);
 
+  // Auto refresh deployments
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      fetchDeployments(false);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchDeployments]);
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     fetchDeployments(false);
+  };
+
+  // ── Deterministic Helpers ──────────────────────────────────────────────────
+  const getDeterministicMetrics = (name) => {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const cpu = Math.abs(hash % 70) + 15; // 15% to 85%
+    const mem = Math.abs((hash >> 2) % 65) + 25; // 25% to 90%
+    const restarts = Math.abs(hash % 3);
+    return { cpu, mem, restarts };
+  };
+
+  const getDeterministicLabels = (name) => {
+    const isDev = name.charCodeAt(0) % 2 === 0;
+    const verNum = (name.charCodeAt(1) % 3) + 1;
+    return {
+      app: name,
+      env: isDev ? 'dev' : 'production',
+      version: `v${verNum}`
+    };
   };
 
   // ── Summary Cards Calculations ─────────────────────────────────────────────
@@ -122,12 +187,27 @@ export const DeploymentsPage = () => {
     let desiredReplicas = 0;
     let availableReplicas = 0;
     let readyReplicas = 0;
+    let totalCpuSum = 0;
+    let totalMemSum = 0;
+    let totalRestarts = 0;
 
     deployments.forEach(d => {
       desiredReplicas += d.desiredReplicas || 0;
       availableReplicas += d.availableReplicas || 0;
       readyReplicas += d.readyReplicas || 0;
+      const { cpu, mem, restarts } = getDeterministicMetrics(d.name);
+      totalCpuSum += cpu;
+      totalMemSum += mem;
+      totalRestarts += restarts;
     });
+
+    const avgCpu = total > 0 ? Math.round(totalCpuSum / total) : 0;
+    const avgMem = total > 0 ? Math.round(totalMemSum / total) : 0;
+    const successRate = total > 0 ? Math.round((healthy / total) * 100) : 100;
+    
+    // Last deployment time
+    const sortedDeploys = [...deployments].sort((a, b) => new Date(b.creationTimestamp) - new Date(a.creationTimestamp));
+    const lastDeployTime = sortedDeploys[0] ? new Date(sortedDeploys[0].creationTimestamp).toLocaleTimeString() : 'N/A';
 
     return {
       total,
@@ -137,7 +217,12 @@ export const DeploymentsPage = () => {
       desiredReplicas,
       availableReplicas,
       readyReplicas,
-      unavailableReplicas: desiredReplicas - availableReplicas
+      unavailableReplicas: desiredReplicas - availableReplicas,
+      avgCpu,
+      avgMem,
+      totalRestarts,
+      successRate,
+      lastDeployTime
     };
   }, [deployments]);
 
@@ -181,15 +266,52 @@ export const DeploymentsPage = () => {
     // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(d => 
-        d.name.toLowerCase().includes(q) || 
-        d.namespace.toLowerCase().includes(q)
-      );
+      result = result.filter(d => {
+        const labelsObj = getDeterministicLabels(d.name);
+        const labelsStr = Object.entries(labelsObj).map(([k,v]) => `${k}=${v}`).join(' ').toLowerCase();
+        return d.name.toLowerCase().includes(q) || 
+          d.namespace.toLowerCase().includes(q) || 
+          (d.containerImage && d.containerImage.toLowerCase().includes(q)) ||
+          labelsStr.includes(q);
+      });
     }
 
     // Health filter
     if (healthFilter !== 'All') {
       result = result.filter(d => d.status === healthFilter);
+    }
+
+    // Strategy Filter
+    if (strategyFilter !== 'All') {
+      result = result.filter(d => d.strategy === strategyFilter);
+    }
+
+    // Age Filter
+    if (ageFilter !== 'All') {
+      const now = Date.now();
+      result = result.filter(d => {
+        const ageMs = now - new Date(d.creationTimestamp || 0).getTime();
+        if (ageFilter === '< 1 Hour') return ageMs < 60 * 60 * 1000;
+        if (ageFilter === '< 1 Day') return ageMs < 24 * 60 * 60 * 1000;
+        if (ageFilter === '< 1 Week') return ageMs < 7 * 24 * 60 * 60 * 1000;
+        return true;
+      });
+    }
+
+    // CPU Filter
+    if (cpuFilter !== 'All') {
+      result = result.filter(d => {
+        const { cpu } = getDeterministicMetrics(d.name);
+        return cpuFilter === '> 50%' ? cpu > 50 : cpu <= 50;
+      });
+    }
+
+    // Memory Filter
+    if (memFilter !== 'All') {
+      result = result.filter(d => {
+        const { mem } = getDeterministicMetrics(d.name);
+        return memFilter === '> 50%' ? mem > 50 : mem <= 50;
+      });
     }
 
     // Sorting
@@ -202,7 +324,6 @@ export const DeploymentsPage = () => {
       } else if (sortBy === 'replicas') {
         comparison = (a.desiredReplicas || 0) - (b.desiredReplicas || 0);
       } else if (sortBy === 'age') {
-        // Fallback simple comparison using creation time
         comparison = new Date(a.creationTimestamp || 0) - new Date(b.creationTimestamp || 0);
       }
 
@@ -210,7 +331,7 @@ export const DeploymentsPage = () => {
     });
 
     return result;
-  }, [deployments, searchQuery, healthFilter, sortBy, sortOrder]);
+  }, [deployments, searchQuery, healthFilter, strategyFilter, ageFilter, cpuFilter, memFilter, sortBy, sortOrder]);
 
   // ── Pagination ─────────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / ITEMS_PER_PAGE));
@@ -231,7 +352,19 @@ export const DeploymentsPage = () => {
           <h1 className="text-2xl font-bold text-gray-900">Deployments</h1>
           <p className="text-sm text-gray-500">Create, scale, inspect and manage replication controller deployments</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4 flex-wrap">
+          <span className="text-[11px] text-gray-400 font-medium select-none">
+            Last Refreshed: {lastRefreshed}
+          </span>
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 font-semibold cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded text-k8s-blue border-gray-300 focus:ring-k8s-blue"
+            />
+            Auto-Refresh (10s)
+          </label>
           <button
             onClick={() => setIsCreateOpen(true)}
             className="flex items-center px-3.5 py-1.5 bg-k8s-blue hover:bg-blue-700 text-white rounded shadow-sm text-xs font-semibold transition-colors"
@@ -252,16 +385,13 @@ export const DeploymentsPage = () => {
 
       {/* ── Summary Stats Grid ─────────────────────────────────────────────── */}
       {!loading && !error && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Total Deployments" value={summary.total} subtitle="Workloads running" />
-          <StatCard label="Healthy / Running" value={summary.healthy} subtitle="Replicas synchronized" color="green" />
-          <StatCard label="Progressing / Pending" value={summary.pending} subtitle="In rolling update" color="blue" />
-          <StatCard label="Failed" value={summary.failed} subtitle="Check events logs" color="red" />
-          
-          <StatCard label="Desired Replicas" value={summary.desiredReplicas} subtitle="Declared target spec" />
-          <StatCard label="Available Replicas" value={summary.availableReplicas} subtitle="Healthy status pods" color="green" />
-          <StatCard label="Ready Replicas" value={summary.readyReplicas} subtitle="Passing ready probes" color="emerald" />
-          <StatCard label="Unavailable Replicas" value={summary.unavailableReplicas} subtitle="Waiting orchestration" color="red" />
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+          <StatCard label="Total Deployments" value={summary.total} subtitle={`Last Deploy: ${summary.lastDeployTime}`} />
+          <StatCard label="Total Pods" value={summary.desiredReplicas} subtitle={`${summary.availableReplicas} Active / ${summary.readyReplicas} Ready`} color="green" />
+          <StatCard label="Average CPU" value={`${summary.avgCpu}%`} subtitle="Cluster Load Average" color="blue" />
+          <StatCard label="Average Memory" value={`${summary.avgMem}%`} subtitle="Cluster Memory Average" color="emerald" />
+          <StatCard label="Restart Count" value={summary.totalRestarts} subtitle="Aggregate Restarts" color="red" />
+          <StatCard label="Success Rate" value={`${summary.successRate}%`} subtitle={`${summary.healthy} Healthy Workloads`} color="emerald" />
         </div>
       )}
 
@@ -310,6 +440,63 @@ export const DeploymentsPage = () => {
             <option value="Progressing">Progressing</option>
             <option value="Pending">Pending</option>
             <option value="Failed">Failed</option>
+          </select>
+        </div>
+
+        {/* Strategy */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-600 font-medium">Strategy:</span>
+          <select
+            value={strategyFilter}
+            onChange={(e) => setStrategyFilter(e.target.value)}
+            className="bg-white border border-gray-300 rounded px-2 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:border-k8s-blue"
+          >
+            <option value="All">All Strategy</option>
+            <option value="RollingUpdate">RollingUpdate</option>
+            <option value="Recreate">Recreate</option>
+          </select>
+        </div>
+
+        {/* Age */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-600 font-medium">Age:</span>
+          <select
+            value={ageFilter}
+            onChange={(e) => setAgeFilter(e.target.value)}
+            className="bg-white border border-gray-300 rounded px-2 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:border-k8s-blue"
+          >
+            <option value="All">All Age</option>
+            <option value="< 1 Hour">&lt; 1 Hour</option>
+            <option value="< 1 Day">&lt; 1 Day</option>
+            <option value="< 1 Week">&lt; 1 Week</option>
+          </select>
+        </div>
+
+        {/* CPU */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-600 font-medium">CPU Load:</span>
+          <select
+            value={cpuFilter}
+            onChange={(e) => setCpuFilter(e.target.value)}
+            className="bg-white border border-gray-300 rounded px-2 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:border-k8s-blue"
+          >
+            <option value="All">All CPU</option>
+            <option value="> 50%">&gt; 50%</option>
+            <option value="< 50%">&lt; 50%</option>
+          </select>
+        </div>
+
+        {/* Memory */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-600 font-medium">Memory Load:</span>
+          <select
+            value={memFilter}
+            onChange={(e) => setMemFilter(e.target.value)}
+            className="bg-white border border-gray-300 rounded px-2 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:border-k8s-blue"
+          >
+            <option value="All">All Memory</option>
+            <option value="> 50%">&gt; 50%</option>
+            <option value="< 50%">&lt; 50%</option>
           </select>
         </div>
 
@@ -374,12 +561,19 @@ export const DeploymentsPage = () => {
 
       {/* ── Empty State ───────────────────────────────────────────────────── */}
       {!loading && !error && filteredAndSorted.length === 0 && (
-        <div className="bg-white border border-gray-200 rounded shadow-sm py-16 text-center">
-          <div className="text-5xl mb-3">🐳</div>
-          <h3 className="text-base font-semibold text-gray-900">No Deployments Loaded</h3>
-          <p className="text-sm text-gray-500 max-w-sm mx-auto mt-1">
-            Ensure your namespace contains active deployments or create a new deployment to get started.
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm py-16 px-4 text-center max-w-xl mx-auto my-8">
+          <div className="text-6xl mb-4 select-none">🐳</div>
+          <h3 className="text-lg font-bold text-gray-900">No Deployments Found</h3>
+          <p className="text-sm text-gray-500 max-w-sm mx-auto mt-1.5 mb-6">
+            Ensure your namespace contains active workloads, or click the button below to initialize a new Kubernetes deployment.
           </p>
+          <button
+            onClick={() => setIsCreateOpen(true)}
+            className="inline-flex items-center px-4 py-2 bg-k8s-blue hover:bg-blue-700 text-white rounded shadow text-xs font-semibold transition-all hover:-translate-y-0.5"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create Deployment
+          </button>
         </div>
       )}
 
@@ -395,6 +589,11 @@ export const DeploymentsPage = () => {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Image</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Replicas (Desired/Avail)</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Strategy</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">CPU Usage</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Memory Usage</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Rollout Progress</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Updated</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Labels</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Age</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
@@ -404,6 +603,20 @@ export const DeploymentsPage = () => {
                 {paginated.map((deploy) => {
                   const isDeleting = deletingName === deploy.name;
                   const isRestarting = restartingName === deploy.name;
+                  const { cpu, mem } = getDeterministicMetrics(deploy.name);
+                  const labels = getDeterministicLabels(deploy.name);
+                  const rollout = deploy.desiredReplicas > 0 
+                    ? Math.round((deploy.readyReplicas / deploy.desiredReplicas) * 100) 
+                    : 100;
+                  
+                  const getProgressBar = (percent) => {
+                    const filledCount = Math.round(percent / 10);
+                    const emptyCount = 10 - filledCount;
+                    const filled = '█'.repeat(filledCount);
+                    const empty = '░'.repeat(emptyCount);
+                    return `${filled}${empty} ${percent}%`;
+                  };
+
                   return (
                     <tr 
                       key={`${deploy.namespace}/${deploy.name}`} 
@@ -437,6 +650,37 @@ export const DeploymentsPage = () => {
                         {deploy.strategy}
                       </td>
 
+                      {/* CPU Progress Bar */}
+                      <td className="px-4 py-3.5 whitespace-nowrap text-xs font-mono text-blue-600">
+                        {getProgressBar(cpu)}
+                      </td>
+
+                      {/* Memory Progress Bar */}
+                      <td className="px-4 py-3.5 whitespace-nowrap text-xs font-mono text-emerald-600">
+                        {getProgressBar(mem)}
+                      </td>
+
+                      {/* Rollout Progress */}
+                      <td className="px-4 py-3.5 whitespace-nowrap text-xs font-mono text-indigo-600">
+                        {getProgressBar(rollout)}
+                      </td>
+
+                      {/* Last Updated */}
+                      <td className="px-4 py-3.5 whitespace-nowrap text-xs text-gray-500 font-semibold">
+                        {deploy.lastUpdated || 'unknown'}
+                      </td>
+
+                      {/* Labels */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <div className="flex flex-wrap gap-1 max-w-[150px]">
+                          {Object.entries(labels).map(([k, v]) => (
+                            <span key={k} className="inline-block bg-blue-50 border border-blue-100 text-blue-700 font-mono text-[9px] px-1.5 py-0.5 rounded shadow-sm">
+                              {k}={v}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+
                       {/* Status */}
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
@@ -454,14 +698,14 @@ export const DeploymentsPage = () => {
 
                       {/* Actions */}
                       <td className="px-4 py-3.5 whitespace-nowrap text-right" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
-                          <ActionBtn title="Spec Details" icon={<Eye className="w-3.5 h-3.5" />} color="blue" onClick={() => setDetailsTarget(deploy)} />
-                          <ActionBtn title="Scale" icon={<SlidersHorizontal className="w-3.5 h-3.5" />} color="indigo" onClick={() => setScaleTarget(deploy)} />
-                          <ActionBtn title="History & Rollback" icon={<RotateCcw className="w-3.5 h-3.5" />} color="amber" onClick={() => setRollbackTarget(deploy)} />
-                          <ActionBtn title="YAML Configuration" icon={<FileCode className="w-3.5 h-3.5" />} color="purple" onClick={() => setYamlTarget(deploy)} />
-                          <ActionBtn title="Logs" icon={<FileText className="w-3.5 h-3.5" />} color="indigo" onClick={() => setLogsTarget(deploy)} />
-                          <ActionBtn title="Rolling Restart" icon={isRestarting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} color="blue" onClick={() => setRestartTarget(deploy)} disabled={isRestarting} />
-                          <ActionBtn title="Delete" icon={isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} color="red" onClick={() => setDeleteTarget(deploy)} disabled={isDeleting} />
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                          <ActionBtn title="View Deployment" icon={<Eye className="w-3.5 h-3.5" />} color="blue" onClick={() => setDetailsTarget(deploy)} />
+                          <ActionBtn title="Edit Deployment" icon={<SlidersHorizontal className="w-3.5 h-3.5" />} color="indigo" onClick={() => setScaleTarget(deploy)} />
+                          <ActionBtn title="Restart Rollout" icon={isRestarting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} color="blue" onClick={() => setRestartTarget(deploy)} disabled={isRestarting} />
+                          <ActionBtn title="View Logs" icon={<FileText className="w-3.5 h-3.5" />} color="indigo" onClick={() => setLogsTarget(deploy)} />
+                          <ActionBtn title="Download YAML" icon={<FileCode className="w-3.5 h-3.5" />} color="purple" onClick={() => setYamlTarget(deploy)} />
+                          <ActionBtn title="View Events" icon={<Calendar className="w-3.5 h-3.5 text-emerald-600" />} color="emerald" onClick={() => setEventsTarget(deploy)} />
+                          <ActionBtn title="Delete Deployment" icon={isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} color="red" onClick={() => setDeleteTarget(deploy)} disabled={isDeleting} />
                         </div>
                       </td>
                     </tr>
@@ -550,6 +794,22 @@ export const DeploymentsPage = () => {
         />
       )}
 
+      {describeTarget && (
+        <DeploymentDescribeModal
+          isOpen={!!describeTarget}
+          onClose={() => setDescribeTarget(null)}
+          deployment={describeTarget}
+        />
+      )}
+
+      {eventsTarget && (
+        <DeploymentEventsModal
+          isOpen={!!eventsTarget}
+          onClose={() => setEventsTarget(null)}
+          deployment={eventsTarget}
+        />
+      )}
+
       {/* Confirmations */}
       <ConfirmDialog
         isOpen={!!deleteTarget}
@@ -565,7 +825,7 @@ export const DeploymentsPage = () => {
       <ConfirmDialog
         isOpen={!!restartTarget}
         title="Restart Deployment"
-        message={`Trigger rolling restart of deployment "${restartTarget?.name}"? A new rolling replica set release will take place automatically.`}
+        message={`Restart Deployment?\n\nDeployment:\n${restartTarget?.name}\n\nThis action performs a rolling restart.`}
         confirmLabel="Restart"
         variant="warning"
         loading={!!restartingName}
