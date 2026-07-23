@@ -11,8 +11,7 @@ import {
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  Tooltip, 
-  Legend 
+  Tooltip 
 } from 'recharts';
 import { 
   Layers, 
@@ -21,12 +20,13 @@ import {
   Globe, 
   Activity, 
   Clock, 
-  AlertCircle,
-  RefreshCw 
+  RefreshCw,
+  HeartPulse,
+  Filter
 } from 'lucide-react';
 
 export const OverviewPage = () => {
-  const { namespace, clusterDetails, refreshTrigger } = useDashboard();
+  const { namespace, setNamespace, clusterDetails, refreshTrigger } = useDashboard();
   const { addToast } = useToast();
   
   const [loading, setLoading] = useState(true);
@@ -38,20 +38,38 @@ export const OverviewPage = () => {
   const [memoryHistory, setMemoryHistory] = useState([]);
   const [events, setEvents] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState('');
+
+  // Selected namespace dropdown state (initialized from DashboardContext)
+  const [selectedNamespace, setSelectedNamespace] = useState(namespace || 'All Namespaces');
+
+  // Available namespace options
+  const namespaceOptions = ['All Namespaces', 'default', 'kube-system', 'kube-public', 'production', 'staging'];
+
+  const handleNamespaceChange = (newNs) => {
+    setSelectedNamespace(newNs);
+    if (setNamespace) setNamespace(newNs);
+  };
 
   const fetchData = async (showSkeleton = true) => {
     if (showSkeleton) setLoading(true);
     setError(null);
     try {
+      const nsParam = selectedNamespace === 'All Namespaces' ? '' : selectedNamespace;
+      
       const [statsRes, cpuRes, memRes, eventsRes] = await Promise.all([
-        API.get('/dashboard/overview'),
+        API.get('/dashboard/overview', { params: nsParam ? { namespace: nsParam } : {} }),
         API.get('/metrics/cpu'),
         API.get('/metrics/memory'),
-        API.get('/events')
+        API.get('/events', { params: nsParam ? { namespace: nsParam } : {} })
       ]);
+
       setStats(statsRes.data?.data || null);
       
-      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastUpdated(timeStr);
+
       const cpuVal = cpuRes.data?.data?.value || 0;
       const memVal = memRes.data?.data?.value || 0;
       
@@ -65,7 +83,9 @@ export const OverviewPage = () => {
       });
       
       const evList = eventsRes.data?.data || [];
-      setEvents(evList.slice(0, 8)); // Top 8 events
+      // Filter events by selected namespace if not All Namespaces
+      const filteredEvents = nsParam ? evList.filter(e => e.namespace === nsParam) : evList;
+      setEvents(filteredEvents.slice(0, 8)); // Top 8 events
     } catch (err) {
       setError('Failed to fetch dashboard metrics. Please check connection.');
     } finally {
@@ -74,7 +94,7 @@ export const OverviewPage = () => {
     }
   };
 
-  // Poll data every 5 seconds
+  // Poll data every 5 seconds & re-fetch on namespace or refreshTrigger change
   useEffect(() => {
     fetchData(true);
 
@@ -83,7 +103,7 @@ export const OverviewPage = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [refreshTrigger]);
+  }, [selectedNamespace, refreshTrigger]);
 
   // Sync event alerts with Toast notifications
   useEffect(() => {
@@ -92,7 +112,6 @@ export const OverviewPage = () => {
       const toastType = type === 'Warning' ? 'warning' : type === 'Danger' ? 'error' : 'success';
       addToast(message, toastType);
       
-      // Update local events list instantly
       setEvents(prev => [e.detail, ...prev].slice(0, 8));
     };
 
@@ -105,6 +124,33 @@ export const OverviewPage = () => {
     fetchData(false);
   };
 
+  // Calculate cluster health badge
+  const getClusterHealth = () => {
+    if (stats?.health) return stats.health;
+    const failedPods = stats?.pods?.failed || 0;
+    const notReadyNodes = stats?.nodes?.notReady || 0;
+    const unavailDepls = stats?.deployments?.unavailable || 0;
+
+    if (notReadyNodes > 0 || failedPods > 2) return 'Critical';
+    if (failedPods > 0 || unavailDepls > 0) return 'Warning';
+    return 'Healthy';
+  };
+
+  const clusterHealth = getClusterHealth();
+
+  const getHealthBadgeStyle = (status) => {
+    switch (status) {
+      case 'Healthy':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200 ring-emerald-500/20';
+      case 'Warning':
+        return 'bg-amber-50 text-amber-700 border-amber-200 ring-amber-500/20';
+      case 'Critical':
+        return 'bg-red-50 text-red-700 border-red-200 ring-red-500/20';
+      default:
+        return 'bg-gray-50 text-gray-700 border-gray-200';
+    }
+  };
+
   if (error) {
     return <ErrorState message={error} onRetry={() => fetchData(true)} />;
   }
@@ -112,7 +158,8 @@ export const OverviewPage = () => {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <CardSkeleton />
           <CardSkeleton />
           <CardSkeleton />
           <CardSkeleton />
@@ -130,23 +177,54 @@ export const OverviewPage = () => {
   return (
     <div className="space-y-6">
       
-      {/* Title Header with Refresh Button */}
-      <div className="flex justify-between items-center border-b border-gray-200 pb-4">
+      {/* Title Header with Namespace Filter & Last Updated Timestamp */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Cluster Overview</h1>
-          <p className="text-sm text-gray-500">Real-time status of workspace workloads in namespace: <span className="font-semibold text-k8s-blue">{namespace}</span></p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">Cluster Overview</h1>
+            
+            {/* Requirement #1: Namespace Filter dropdown */}
+            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-300 rounded px-2.5 py-1 text-xs">
+              <Filter className="w-3.5 h-3.5 text-gray-400" />
+              <span className="text-gray-500 font-semibold">Namespace:</span>
+              <select
+                value={selectedNamespace}
+                onChange={e => handleNamespaceChange(e.target.value)}
+                className="bg-transparent font-bold text-k8s-blue focus:outline-none cursor-pointer"
+              >
+                {namespaceOptions.map(ns => (
+                  <option key={ns} value={ns}>{ns}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Real-time status of workspace workloads in namespace: <span className="font-semibold text-k8s-blue">{selectedNamespace}</span>
+          </p>
         </div>
-        <button
-          onClick={handleManualRefresh}
-          disabled={isRefreshing}
-          className="flex items-center px-3.5 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-xs font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none transition-colors"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 mr-2 ${isRefreshing ? 'animate-spin text-k8s-blue' : ''}`} />
-          {isRefreshing ? 'Refreshing...' : 'Refresh'}
-        </button>
+
+        {/* Right Action Bar: Last Updated Timestamp & Refresh Button */}
+        <div className="flex items-center gap-4">
+          {/* Requirement #3: Last Updated Timestamp */}
+          {lastUpdated && (
+            <div className="text-right hidden sm:block">
+              <span className="block text-[10px] uppercase tracking-wider font-bold text-gray-400">Last Updated</span>
+              <span className="text-xs font-mono font-bold text-gray-700">{lastUpdated}</span>
+            </div>
+          )}
+
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="flex items-center px-3.5 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-xs font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 mr-2 ${isRefreshing ? 'animate-spin text-k8s-blue' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
-      {/* Current Cluster Info Card */}
+      {/* Requirement #4: Current Cluster Info Card */}
       {clusterDetails && (
         <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-lg shadow-md border border-slate-700 text-white p-5">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -182,88 +260,109 @@ export const OverviewPage = () => {
         </div>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {/* Card 1: Pods */}
-        <div className="bg-white rounded border border-gray-200 shadow-sm p-5 flex flex-col justify-between">
+      {/* Summary Cards Grid (Requirement #2: Cluster Health Card + Existing Pods, Deployments, Nodes, Services) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+
+        {/* Requirement #2: Cluster Health Card */}
+        <div className="bg-white rounded border border-gray-200 shadow-sm p-4 flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Pods</p>
-              <h3 className="text-3xl font-bold text-gray-800 mt-1">
-                {stats?.pods?.running + stats?.pods?.pending + stats?.pods?.failed}
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Cluster Health</p>
+              <div className="mt-2">
+                <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-extrabold border ring-1 ${getHealthBadgeStyle(clusterHealth)}`}>
+                  ● {clusterHealth}
+                </span>
+              </div>
+            </div>
+            <div className={`p-2.5 rounded-lg ${clusterHealth === 'Healthy' ? 'bg-emerald-50 text-emerald-600' : clusterHealth === 'Warning' ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'}`}>
+              <HeartPulse className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] font-medium text-gray-500">
+            <span>Overall Status</span>
+            <span className="font-bold">{clusterHealth === 'Healthy' ? 'All Systems Nominal' : clusterHealth === 'Warning' ? 'Issues Detected' : 'Action Required'}</span>
+          </div>
+        </div>
+
+        {/* Card 1: Pods Summary */}
+        <div className="bg-white rounded border border-gray-200 shadow-sm p-4 flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Pods Summary</p>
+              <h3 className="text-2xl font-bold text-gray-800 mt-1">
+                {(stats?.pods?.running || 0) + (stats?.pods?.pending || 0) + (stats?.pods?.failed || 0)}
               </h3>
             </div>
             <div className="p-2.5 bg-emerald-50 rounded text-emerald-500">
               <Layers className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-xs font-medium">
-            <span className="text-emerald-600">● {stats?.pods?.running} Running</span>
-            <span className="text-yellow-600">● {stats?.pods?.pending} Pending</span>
-            <span className="text-red-600">● {stats?.pods?.failed} Failed</span>
+          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] font-medium">
+            <span className="text-emerald-600 font-bold">● {stats?.pods?.running || 0} Running</span>
+            <span className="text-amber-600">● {stats?.pods?.pending || 0} Pending</span>
+            <span className="text-red-600">● {stats?.pods?.failed || 0} Failed</span>
           </div>
         </div>
 
-        {/* Card 2: Deployments */}
-        <div className="bg-white rounded border border-gray-200 shadow-sm p-5 flex flex-col justify-between">
+        {/* Card 2: Deployments Summary */}
+        <div className="bg-white rounded border border-gray-200 shadow-sm p-4 flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Deployments</p>
-              <h3 className="text-3xl font-bold text-gray-800 mt-1">
-                {stats?.deployments?.available + stats?.deployments?.unavailable}
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Deployments</p>
+              <h3 className="text-2xl font-bold text-gray-800 mt-1">
+                {(stats?.deployments?.available || 0) + (stats?.deployments?.unavailable || 0)}
               </h3>
             </div>
             <div className="p-2.5 bg-blue-50 rounded text-k8s-blue">
               <Send className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-4 text-xs font-medium">
-            <span className="text-k8s-blue">● {stats?.deployments?.available} Available</span>
-            <span className="text-red-500">● {stats?.deployments?.unavailable} Unavailable</span>
+          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] font-medium">
+            <span className="text-k8s-blue font-bold">● {stats?.deployments?.available || 0} Avail</span>
+            <span className="text-red-500 font-bold">● {stats?.deployments?.unavailable || 0} Unavail</span>
           </div>
         </div>
 
-        {/* Card 3: Nodes */}
-        <div className="bg-white rounded border border-gray-200 shadow-sm p-5 flex flex-col justify-between">
+        {/* Card 3: Nodes Summary */}
+        <div className="bg-white rounded border border-gray-200 shadow-sm p-4 flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Nodes</p>
-              <h3 className="text-3xl font-bold text-gray-800 mt-1">
-                {stats?.nodes?.ready + stats?.nodes?.notReady}
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Nodes Summary</p>
+              <h3 className="text-2xl font-bold text-gray-800 mt-1">
+                {(stats?.nodes?.ready || 0) + (stats?.nodes?.notReady || 0)}
               </h3>
             </div>
             <div className="p-2.5 bg-orange-50 rounded text-orange-500">
               <Cpu className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-4 text-xs font-medium">
-            <span className="text-orange-600">● {stats?.nodes?.ready} Ready</span>
-            <span className="text-red-500">● {stats?.nodes?.notReady} Not Ready</span>
+          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] font-medium">
+            <span className="text-orange-600 font-bold">● {stats?.nodes?.ready || 0} Ready</span>
+            <span className="text-red-500 font-bold">● {stats?.nodes?.notReady || 0} Not Ready</span>
           </div>
         </div>
 
-        {/* Card 4: Services */}
-        <div className="bg-white rounded border border-gray-200 shadow-sm p-5 flex flex-col justify-between">
+        {/* Card 4: Services Summary */}
+        <div className="bg-white rounded border border-gray-200 shadow-sm p-4 flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Services</p>
-              <h3 className="text-3xl font-bold text-gray-800 mt-1">
-                {stats?.services?.clusterIP + stats?.services?.nodePort + stats?.services?.loadBalancer}
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Services Summary</p>
+              <h3 className="text-2xl font-bold text-gray-800 mt-1">
+                {(stats?.services?.clusterIP || 0) + (stats?.services?.nodePort || 0) + (stats?.services?.loadBalancer || 0)}
               </h3>
             </div>
             <div className="p-2.5 bg-purple-50 rounded text-purple-500">
               <Globe className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-xs font-medium">
-            <span className="text-purple-600">● {stats?.services?.clusterIP} ClusterIP</span>
-            <span className="text-purple-400">● {stats?.services?.nodePort} NodePort</span>
-            <span className="text-indigo-600">● {stats?.services?.loadBalancer} LB</span>
+          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] font-medium">
+            <span className="text-purple-600 font-bold">● {stats?.services?.clusterIP || 0} ClusterIP</span>
+            <span className="text-indigo-600 font-bold">● {stats?.services?.loadBalancer || 0} LB</span>
           </div>
         </div>
       </div>
 
-      {/* Real-time Monitoring Section */}
+      {/* Requirement #4: Real-time Monitoring Section */}
       <div className="bg-white border border-gray-200 rounded shadow-sm p-6">
         <div className="flex items-center gap-2 mb-6">
           <Activity className="w-5 h-5 text-k8s-blue" />
@@ -330,11 +429,16 @@ export const OverviewPage = () => {
         </div>
       </div>
 
-      {/* Recent Events Panel */}
+      {/* Requirement #4: Recent Events Panel */}
       <div className="bg-white border border-gray-200 rounded shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-          <Clock className="w-4 h-4 text-gray-500" />
-          <h2 className="text-base font-bold text-gray-800">Recent Cluster Events</h2>
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-gray-500" />
+            <h2 className="text-base font-bold text-gray-800">Recent Cluster Events</h2>
+          </div>
+          <span className="text-xs text-gray-400 font-mono">
+            Showing {events.length} event(s)
+          </span>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -343,38 +447,46 @@ export const OverviewPage = () => {
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-1/5">Time</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-1/4">Resource</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-1/6">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-1/6">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-1/6">Namespace</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-1/3">Message</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {events.map((evt) => {
-                let badgeClass = 'bg-green-50 text-green-700 border-green-200';
-                if (evt.type === 'Warning') badgeClass = 'bg-yellow-50 text-yellow-700 border-yellow-200';
-                if (evt.type === 'Danger' || evt.type === 'Error') badgeClass = 'bg-red-50 text-red-700 border-red-200';
+              {events.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-xs text-gray-400 italic">
+                    No recent events logged for namespace "{selectedNamespace}".
+                  </td>
+                </tr>
+              ) : (
+                events.map((evt) => {
+                  let badgeClass = 'bg-green-50 text-green-700 border-green-200';
+                  if (evt.type === 'Warning') badgeClass = 'bg-yellow-50 text-yellow-700 border-yellow-200';
+                  if (evt.type === 'Danger' || evt.type === 'Error') badgeClass = 'bg-red-50 text-red-700 border-red-200';
 
-                return (
-                  <tr key={evt.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-3.5 whitespace-nowrap text-xs text-gray-500 font-mono">
-                      {new Date(evt.time).toLocaleTimeString()}
-                    </td>
-                    <td className="px-6 py-3.5 whitespace-nowrap text-xs font-semibold text-gray-700 font-mono">
-                      {evt.resource}
-                    </td>
-                    <td className="px-6 py-3.5 whitespace-nowrap text-xs">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${badgeClass}`}>
-                        {evt.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3.5 whitespace-nowrap text-xs font-semibold text-gray-700">
-                      {evt.status}
-                    </td>
-                    <td className="px-6 py-3.5 text-xs text-gray-600 truncate max-w-xs">
-                      {evt.message}
-                    </td>
-                  </tr>
-                );
-              })}
+                  return (
+                    <tr key={evt.id || evt.time + Math.random()} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-3.5 whitespace-nowrap text-xs text-gray-500 font-mono">
+                        {new Date(evt.time).toLocaleTimeString()}
+                      </td>
+                      <td className="px-6 py-3.5 whitespace-nowrap text-xs font-semibold text-gray-700 font-mono">
+                        {evt.resource}
+                      </td>
+                      <td className="px-6 py-3.5 whitespace-nowrap text-xs">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${badgeClass}`}>
+                          {evt.type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3.5 whitespace-nowrap text-xs font-medium text-gray-500">
+                        {evt.namespace || 'default'}
+                      </td>
+                      <td className="px-6 py-3.5 text-xs text-gray-600 truncate max-w-xs">
+                        {evt.message}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
